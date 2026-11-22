@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="World Géo">
+<meta name="description" content="Apprends les 194 pays du monde : nom, capitale, drapeau et localisation.">
+<title>World – Géo</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar"><button id="back" class="icon-btn" aria-label="Retour" hidden>‹</button><div id="title"></div><div id="topright"></div></header>
+  <main id="view"><div class="loading">Chargement…</div></main>
+  <nav id="tabs">
+    <button data-tab="home" class="active"><span class="ti">⌂</span><span>Accueil</span></button>
+    <button data-tab="quiz"><span class="ti">◎</span><span>Défis</span></button>
+    <button data-tab="deck"><span class="ti">▦</span><span>Cartes</span></button>
+    <button data-tab="map"><span class="ti">◍</span><span>Carte</span></button>
+  </nav>
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>
