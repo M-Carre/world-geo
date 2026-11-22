@@ -10,6 +10,23 @@ Elle est en français, fonctionne hors ligne et enregistre la progression sur l�
 
 La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans l’onglet Paramètres.
 
+## Version 3
+- **Défi « continent » supprimé** (trop facile). L’ancienne progression de ce défi est archivée dans la sauvegarde, pas effacée.
+- **Révision espacée FSRS-6** (le modèle d’Anki, portage de py-fsrs 6.3.3, poids par défaut) à la place des boîtes fixes. Il y a une carte mémoire par pays et par compétence (capitale, drapeau, localisation), avec sa stabilité, sa difficulté, sa date de retour et ses erreurs.
+  - La note est déduite de la réponse : une erreur vaut « À revoir », une réponse lente « Difficile », une réponse normale « Bien » et une réponse très rapide « Facile ». Les seuils se règlent dans Paramètres (rapide / normal / lent).
+  - Les cartes dues passent d’abord, en commençant par le rappel prédit le plus faible ; les cartes souvent ratées remontent.
+  - Une carte ratée revient quelques questions plus tard dans la même séance.
+  - Les mauvaises réponses choisies servent ensuite de propositions pièges.
+  - La rétention cible se règle à 85, 90 ou 95 %.
+- Écran **Statistiques** : cartes à réviser aujourd’hui, cartes maîtrisées, prévision sur 7 jours, maîtrise par compétence, cartes difficiles et rappel le plus faible. Chaque fiche affiche aussi l’état de mémorisation de ses compétences et un bouton « Réviser ce pays ».
+- Fiches enrichies : un panneau dépliant **« En savoir plus »**, fermé par défaut, donne l’introduction Wikipédia (150 à 350 mots) ainsi que les langues, la monnaie et le régime. La source et la licence CC BY-SA 4.0 y sont indiquées. Tout est disponible hors ligne.
+- **Ponts** entre les vues :
+  - Après une réponse, la bonne réponse et la réponse choisie ouvrent leur fiche ; « retour » ramène exactement au défi, consultation non comptée.
+  - Depuis une fiche, on ouvre les voisins (avec drapeau), la liste du continent depuis la capitale ou le continent, et la carte centrée sur le pays.
+  - Le bilan liste les erreurs cliquables, et les statistiques ouvrent les fiches.
+  - Le bouton retour de l’app et celui du navigateur restaurent l’état de chaque vue.
+- La progression v1/v2 est migrée automatiquement sans perte. Une copie brute est gardée dans `worldgeo.v1.backup-v2`, et l’import accepte aussi les anciennes sauvegardes.
+
 ## Version 2
 - La carte du monde garde la vue (zoom + position + continent) quand on ouvre une fiche puis qu’on revient, quand on change d’onglet et après fermeture de l’app (clé `worldgeo.mapview`). Le bouton ⟲ recentre.
 - Onglet **Paramètres** : thème Jour / Nuit / Auto, taille du texte, animations, étiquettes de la carte (numéros / noms / aucune), nouveaux pays par séance, questions par défi, sons, export / import / réinitialisation. Préférences dans `worldgeo.prefs`, appliquées avant l’affichage.
@@ -27,5 +44,5 @@ Déposer le contenu de ce dossier (ou `world-app.zip`) à la racine d’un hébe
 `python3 -m http.server 8765` dans ce dossier, puis http://localhost:8765
 
 ## Structure
-`index.html`, `css/app.css`, `js/app.js` (vanilla JS, sans dépendance), `data/countries.json`, `data/geo.json`, `flags/*.svg`, `fonts/`, `icons/`, `manifest.webmanifest`, `sw.js` (cache hors ligne versionné).
+`index.html`, `css/app.css`, `js/app.js` (vanilla JS, sans dépendance), `js/fsrs.js` (FSRS-6), `data/wiki.json` (textes Wikipédia), `data/countries.json`, `data/geo.json`, `flags/*.svg`, `fonts/`, `icons/`, `manifest.webmanifest`, `sw.js` (cache hors ligne versionné).
 Sources et licences : voir `LICENCES.md`.
