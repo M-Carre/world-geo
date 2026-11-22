@@ -8,7 +8,13 @@ Elle est en français, fonctionne hors ligne et enregistre la progression sur l�
 2. Bouton **Partager** → **Sur l’écran d’accueil** → Ajouter.
 3. Ouvrir l’app une fois en ligne : tout est mis en cache (environ 3,5 Mo) ; ensuite elle marche hors ligne.
 
-La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans Réglages.
+La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans l’onglet Paramètres.
+
+## Version 2
+- La carte du monde garde la vue (zoom + position + continent) quand on ouvre une fiche puis qu’on revient, quand on change d’onglet et après fermeture de l’app (clé `worldgeo.mapview`). Le bouton ⟲ recentre.
+- Onglet **Paramètres** : thème Jour / Nuit / Auto, taille du texte, animations, étiquettes de la carte (numéros / noms / aucune), nouveaux pays par séance, questions par défi, sons, export / import / réinitialisation. Préférences dans `worldgeo.prefs`, appliquées avant l’affichage.
+- Mise en page robuste au zoom d’affichage de l’iPhone et aux grandes tailles de texte (testée de 280 à 390 px de large, police racine de 100 à 150 %).
+- Une nouvelle version du service worker recharge l’app une fois pour s’afficher tout de suite.
 
 ## Hébergement (fichiers statiques, aucun serveur nécessaire)
 Déposer le contenu de ce dossier (ou `world-app.zip`) à la racine d’un hébergeur HTTPS :

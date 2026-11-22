@@ -36,6 +36,45 @@ function load(){
   return {items:{}, settings:{newPer:3}, stats:{answered:0,correct:0,days:[]}};
 }
 function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e){} }
+
+/* ---------- Préférences d'affichage (clé séparée, lue aussi par index.html avant l'affichage) ---------- */
+const PREF_KEY = 'worldgeo.prefs';
+const PREF_DEF = {theme:'dark', fs:'m', motion:'auto', labels:'num', qn:10, sound:false};
+let P = loadPrefs();
+function loadPrefs(){ try { return Object.assign({}, PREF_DEF, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch(e){ return Object.assign({}, PREF_DEF); } }
+function savePrefs(){ try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch(e){} applyPrefs(); }
+const mq = q => (window.matchMedia ? window.matchMedia(q) : {matches:false, addEventListener(){}});
+function applyPrefs(){
+  const d = document.documentElement;
+  const t = P.theme==='auto' ? (mq('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : P.theme;
+  d.setAttribute('data-theme', t);
+  if (P.fs==='m') d.removeAttribute('data-fs'); else d.setAttribute('data-fs', P.fs);
+  d.classList.toggle('reduce', P.motion==='reduce' || (P.motion==='auto' && mq('(prefers-reduced-motion: reduce)').matches));
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', t==='light' ? '#f3f0e8' : '#000000');
+}
+['(prefers-color-scheme: light)','(prefers-reduced-motion: reduce)'].forEach(q => { const m = mq(q); const f = () => applyPrefs(); if (m.addEventListener) m.addEventListener('change', f); else if (m.addListener) m.addListener(f); });
+const reduceMotion = () => document.documentElement.classList.contains('reduce');
+/* Petits signaux sonores (Web Audio, aucun fichier) */
+let AC = null, beeps = 0;
+function beep(ok){
+  if (!P.sound) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const t0 = AC.currentTime; beeps++;
+    (ok ? [660, 990] : [330, 220]).forEach((f, i) => {
+      const o = AC.createOscillator(), g = AC.createGain(), t = t0 + i*0.11;
+      o.type = ok ? 'sine' : 'triangle'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+0.17);
+      o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.2);
+    });
+  } catch(e){}
+}
+
+/* ---------- Mémoire de la vue de la carte ---------- */
+const MAP_KEY = 'worldgeo.mapview';
+function readMapState(){ try { const m = JSON.parse(localStorage.getItem(MAP_KEY) || sessionStorage.getItem(MAP_KEY)); if (m && Array.isArray(m.view) && m.view.length===4 && m.view.every(Number.isFinite)) return m; } catch(e){} return null; }
+function writeMapState(m){ const t = JSON.stringify(m); try { sessionStorage.setItem(MAP_KEY, t); } catch(e){} try { localStorage.setItem(MAP_KEY, t); } catch(e){} }
 const key = (iso,sk) => iso+':'+sk;
 const item = (iso,sk) => S.items[key(iso,sk)];
 function record(iso, sk, ok){
@@ -113,9 +152,9 @@ function mapSVG(view, opt={}){
     for (const it of GEO.items){ const c = BY[it.id]; if (!c || !it.small || !inter(it.bb,vv)) continue;
       p += `<circle class="dot" data-id="${it.id}" cx="${it.c[0]}" cy="${it.c[1]}" r="3" style="fill:${CONT[c.continent].c}"/>`; }
     p += '</g>';
-    if (labels){ p += '<g class="labels">';
+    if (labels){ p += `<g class="labels" data-k="${labels==='name'?'name':'num'}">`;
       for (const it of GEO.items){ const c = BY[it.id]; if (!c || !inter(it.bb,vv)) continue;
-        p += `<text class="lab" data-n="${c.n}" x="${it.c[0]}" y="${it.c[1]}">${c.n}</text>`; }
+        p += `<text class="lab" data-n="${c.n}" x="${it.c[0]}" y="${it.c[1]}">${labels==='name' ? esc(c.name) : c.n}</text>`; }
       p += '</g>'; }
   }
   return p + '</svg>';
@@ -123,16 +162,17 @@ function mapSVG(view, opt={}){
 function countryView(iso, aspect=2, pad=3.4, minW=200){ const it = GEOBY[iso]; return fitView(it.bb, aspect, pad, minW); }
 
 /* Carte interactive (glisser, pincer, toucher) */
-function interactiveMap(host, view0, {onTap, labels=false, hl=null, mode='world', small=true}={}){
-  host.innerHTML = mapSVG(view0, {mode, labels, hl}) + `<div class="mapctl"><button data-z="in" aria-label="Zoomer">+</button><button data-z="out" aria-label="Dézoomer">−</button><button data-z="reset" aria-label="Recentrer">⟲</button></div>`;
-  const svg = $('svg', host); let v = view0.slice();
+function interactiveMap(host, view0, {onTap, onChange=null, initial=null, full=false, labels=false, hl=null, mode='world', small=true}={}){
+  host.innerHTML = mapSVG(full ? [0,0,MAPW(),MAPH()] : view0, {mode, labels, hl}) + `<div class="mapctl"><button data-z="in" aria-label="Zoomer">+</button><button data-z="out" aria-label="Dézoomer">−</button><button data-z="reset" aria-label="Recentrer">⟲</button></div>`;
+  const svg = $('svg', host); let v = (initial || view0).slice();
   const ptrs = new Map(); let start=null, moved=false, pinch0=null;
   const apply = () => {
     svg.setAttribute('viewBox', v.join(' '));
     const scale = host.clientWidth / v[2] || 1; // px par unité
     svg.querySelectorAll('circle.dot').forEach(c => c.setAttribute('r', (small?5.5:4)/scale));
     const lab = svg.querySelector('g.labels');
-    if (lab){ lab.style.display = scale > 0.9 ? '' : 'none'; lab.querySelectorAll('text').forEach(t => t.setAttribute('font-size', 10/scale)); }
+    if (lab){ const nm = lab.dataset.k==='name'; lab.style.display = scale > (nm ? 1.5 : 0.9) ? '' : 'none'; lab.querySelectorAll('text').forEach(t => t.setAttribute('font-size', (nm ? 9 : 10)/scale)); }
+    if (onChange) onChange(v.slice());
   };
   const clampV = () => { const W=MAPW(),H=MAPH(); v[2]=Math.min(Math.max(W,view0[2]),Math.max(40,v[2])); v[3]=v[2]*view0[3]/view0[2]; v[0]=Math.max(-v[2]*0.3,Math.min(W-v[2]*0.7,v[0])); v[1]=Math.max(-v[3]*0.3,Math.min(H-v[3]*0.7,v[1])); };
   const toSvg = (cx,cy) => { const r = svg.getBoundingClientRect(); const s = Math.min(r.width/v[2], r.height/v[3]); const ox = r.left + (r.width - v[2]*s)/2, oy = r.top + (r.height - v[3]*s)/2; return [v[0]+(cx-ox)/s, v[1]+(cy-oy)/s, s]; };
@@ -148,6 +188,7 @@ function interactiveMap(host, view0, {onTap, labels=false, hl=null, mode='world'
   svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.deltaY>0?1.2:1/1.2, e.clientX, e.clientY); }, {passive:false});
   host.querySelector('.mapctl').addEventListener('click', e => { const z = e.target.closest('button')?.dataset.z; if (!z) return; const r = svg.getBoundingClientRect();
     if (z==='reset'){ v = view0.slice(); apply(); } else zoomAt(z==='in'?0.6:1/0.6, r.left+r.width/2, r.top+r.height/2); });
+  if (initial) clampV();
   requestAnimationFrame(apply);
   return {svg, get view(){return v;}, refresh:apply, setView(nv){ v=nv.slice(); clampV(); apply(); }};
 }
@@ -194,10 +235,10 @@ function vHome(el){
   <button class="big-btn ghost" id="learnw"><div>Apprendre le monde<small>Nouveaux pays dans l’ordre des numéros</small></div><span>›</span></button>
   <div class="h2">Apprendre par continent</div>${zones}
   <div class="h2">Plus</div>
-  <button class="big-btn ghost" id="about"><div>Réglages & sources<small>Nouveaux pays par séance, données, licences</small></div><span>›</span></button>`;
+  <button class="big-btn ghost" id="about"><div>Paramètres<small>Thème jour/nuit, taille du texte, sons, sauvegarde</small></div><span>›</span></button>`;
   $('#rev',el).onclick = () => due ? startSession('WORLD',{reviewOnly:true}) : toast('Tout est à jour !');
   $('#learnw',el).onclick = () => startSession('WORLD');
-  $('#about',el).onclick = () => go(vAbout);
+  $('#about',el).onclick = () => home('settings');
   el.querySelectorAll('.zone').forEach(b => b.onclick = () => go(vZone,{z:b.dataset.zone}));
 }
 
@@ -207,11 +248,11 @@ function vZone(el,{z}){
   el.innerHTML = `
     <button class="big-btn" id="go" style="background:${CONT[z].c};color:${z==='AF'?'#000':'#fff'}"><div>Séance d’apprentissage<small style="color:inherit;opacity:.8">${due} à revoir · ${fresh} nouveaux pays restants</small></div><span>›</span></button>
     <div class="seg">
-      ${['cap','flag','loc','cont'].map(k=>`<button class="opt" data-q="${k}"><b><span class="ico ${k}">${ICON[k]}</span>${SKILLS[k].n}</b><span>Défi rapide · 10 questions</span></button>`).join('')}
+      ${['cap','flag','loc','cont'].map(k=>`<button class="opt" data-q="${k}"><b><span class="ico ${k}">${ICON[k]}</span><span class="tt">${SKILLS[k].n}</span></b><span>Défi rapide · ${P.qn} questions</span></button>`).join('')}
     </div>
     <div class="h2">Les ${cs.length} cartes</div><div class="grid">${cs.map(miniCard).join('')}</div>`;
   $('#go',el).onclick = () => startSession(z);
-  el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => startQuiz({zone:z, type:b.dataset.q, n:10}));
+  el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => startQuiz({zone:z, type:b.dataset.q, n:P.qn}));
   bindMini(el);
 }
 
@@ -240,7 +281,7 @@ function cardExtras(c){
   return `<div class="idbox"><div class="lbl">IDENTITÉ</div>${esc(c.trait)}</div>
     <div class="minimap">${mapSVG(countryView(c.iso3), {hl:c.iso3})}</div>
     <div class="idbox"><div class="lbl">${CONT[c.continent].n.toUpperCase()} · N° ${c.n}</div>
-      <div class="small" style="color:#ccc">${nb ? 'Voisins terrestres : '+esc(nb)+'.' : 'Aucune frontière terrestre avec un autre pays du jeu.'}</div>
+      <div class="small nb">${nb ? 'Voisins terrestres : '+esc(nb)+'.' : 'Aucune frontière terrestre avec un autre pays du jeu.'}</div>
       ${notes.length ? `<div class="small" style="margin-top:8px">${notes.map(esc).join('<br>')}</div>` : ''}
       <div class="small" style="margin-top:8px">Population : Banque mondiale ${c.popYear||''}. Maîtrise : ${Object.keys(SKILLS).map(sk=>SKILLS[sk].n+' '+skillLvl(c.iso3,sk)+'/5').join(' · ')}</div>
     </div>`;
@@ -270,15 +311,24 @@ function vDeck(el,{f='ALL',q=''}={}){
   draw();
 }
 
-function vMap(el,{z='WORLD'}={}){
+function vMap(el, args={}){
   setTitle('Carte du monde');
-  el.innerHTML = `<div class="chips">${['WORLD',...CONT_ORDER].map(k=>`<button class="chip ${k===z?'on':''}" data-z="${k}">${k==='WORLD'?'Monde':`<i style="background:${CONT[k].c}"></i>${CONT[k].n}`}</button>`).join('')}</div>
-    <div class="fullmap" id="fm" style="height:62vh"></div><p class="hint">Glisse et pince pour zoomer · touche un pays pour ouvrir sa carte. Les numéros apparaissent en zoomant.</p>`;
+  const entry = stack[stack.length-1];
+  const saved = args.view ? args : readMapState();
+  let z = (saved && CONT[saved.z] ? saved.z : null) || (args.z && CONT[args.z] ? args.z : 'WORLD');
+  const SHORT = {NA:'Am. du Nord', SA:'Am. du Sud'};
+  el.innerHTML = `<div class="mapview"><div class="chips">${['WORLD',...CONT_ORDER].map(k=>`<button class="chip ${k===z?'on':''}" data-z="${k}" aria-label="${k==='WORLD'?'Monde':CONT[k].n}">${k==='WORLD'?'Monde':`<i style="background:${CONT[k].c}"></i>${SHORT[k]||CONT[k].n}`}</button>`).join('')}</div>
+    <div class="fullmap" id="fm"></div><p class="hint">Glisse et pince pour zoomer · touche un pays pour ouvrir sa carte.${P.labels==='num' ? ' Les numéros apparaissent en zoomant.' : P.labels==='name' ? ' Les noms apparaissent en zoomant.' : ''} La carte garde ta vue ; ⟲ recentre.</p></div>`;
   const host = $('#fm',el);
-  const aspect = () => host.clientWidth/host.clientHeight;
+  const aspect = () => host.clientWidth/host.clientHeight || 1;
   const viewFor = k => fitRegion(GEO.views[k], aspect());
-  const im = interactiveMap(host, viewFor(z), {labels:true, onTap: id => { if (id) go(vCard,{iso:id}); }});
-  el.querySelectorAll('.chip').forEach(b => b.onclick = () => { z=b.dataset.z; stack[stack.length-1].args={z}; el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); im.setView(viewFor(z)); });
+  // vue mémorisée : même centre, même zone visible (adaptée si la forme de la carte a changé)
+  const keep = v => { const a = aspect(); let w = Math.max(v[2], v[3]*a), h = w/a; return [v[0]+v[2]/2-w/2, v[1]+v[3]/2-h/2, w, h]; };
+  let timer = null;
+  const remember = (v, now) => { const st = {z, view: v.map(x => Math.round(x*100)/100)}; entry.args = st; clearTimeout(timer); if (now) writeMapState(st); else timer = setTimeout(() => writeMapState(st), 150); };
+  const im = interactiveMap(host, viewFor(z), {full:true, labels: P.labels==='none' ? false : P.labels, initial: saved && saved.view ? keep(saved.view) : null,
+    onChange: v => remember(v), onTap: id => { if (!id) return; remember(im.view, true); go(vCard,{iso:id}); }});
+  el.querySelectorAll('.chip').forEach(b => b.onclick = () => { z=b.dataset.z; el.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); im.setView(viewFor(z)); remember(im.view, true); });
 }
 
 /* ---------- Questions ---------- */
@@ -363,13 +413,13 @@ function vSession(el, st){
   if (q.kind==='loc') body += `<div class="qmap">${mapSVG(countryView(c.iso3, 4/3, 4.5, 330), {hl:c.iso3, hlColor:'#e5383f'})}</div>`;
   const ansCls = q.kind==='flagpick' ? 'answers cols2 flags' : q.kind==='cont' ? 'answers cols2' : 'answers';
   const answers = q.kind==='tap' ? '' : `<div class="${ansCls}">${q.opts.map(o => `<button class="ans" data-id="${o.id}">${o.sw?`<i class="sw" style="background:${o.sw}"></i>`:''}${o.img?`<img src="${o.img}" alt="Drapeau ${esc(o.label)}">`:esc(o.label)}</button>`).join('')}</div>`;
-  const nameSub = q.sub ? `<div class="qsub" style="font-weight:800;font-size:19px;color:#111;margin-top:6px;text-transform:uppercase">${esc(q.sub)}</div>` : '';
+  const nameSub = q.sub ? `<div class="qsub name">${esc(q.sub)}</div>` : '';
   el.innerHTML = `<div class="qwrap">${progress}<div class="qcard">${badge}<div class="q">${esc(q.ask)}</div>${nameSub}${body}</div>
     ${q.kind==='tap' ? `<div class="fullmap tapmap" id="tm"></div><p class="hint" id="th">Glisse ou pince pour zoomer, puis touche le pays.</p>` : ''}
     ${answers}<div class="feedback" id="fb"></div></div>`;
   let done = false;
   const finish = (ok, chosen) => {
-    if (done) return; done = true; st.n++; if (ok) st.ok++;
+    if (done) return; done = true; st.n++; if (ok) st.ok++; beep(ok);
     if (st.srs) record(q.iso, q.sk, ok);
     if (!ok && !step.retry){ const at = Math.min(st.steps.length, st.i+4); st.steps.splice(at, 0, {type:'q', iso:q.iso, sk:q.sk, variant:step.variant, retry:true}); }
     el.querySelectorAll('.ans').forEach(b => { const id=b.dataset.id; if (id===q.answer) b.classList.add('ok'); else if (id===chosen) b.classList.add('ko'); else b.classList.add('fade'); b.disabled=true; });
@@ -379,7 +429,7 @@ function vSession(el, st){
       <div class="mini-fiche"><img src="${flagSrc(c)}" alt=""><div><b>${esc(c.name)}</b><span>${esc(c.capital)} · ${CONT[c.continent].n} · n° ${c.n}</span>${!ok?`<p>${esc(c.trait)}</p>`:''}</div></div>
       <button class="next" id="nx">Continuer ›</button>`;
     $('#nx',el).onclick = nextStep;
-    fb.scrollIntoView({behavior:'smooth', block:'end'});
+    fb.scrollIntoView({behavior: reduceMotion() ? 'auto' : 'smooth', block:'end'});
   };
   el.querySelectorAll('.ans').forEach(b => b.onclick = () => finish(b.dataset.id===q.answer, b.dataset.id));
   if (q.kind==='tap'){
@@ -416,11 +466,11 @@ function vSummary(el, st){
 /* ---------- Défis ---------- */
 function vQuiz(el){
   setTitle('Défis');
-  let type='mix', zone='WORLD', n=10;
+  let type='mix', zone='WORLD', n=P.qn;
   const types = [['cap','Capitale','Trouve la capitale (et l’inverse)'],['flag','Drapeau','Reconnais le pays à son drapeau'],['loc','Localisation','Quel pays est surligné ?'],['tap','Toucher la carte','Touche le pays demandé'],['cont','Continent','Range le pays'],['mix','Mélange','Les quatre défis']];
   const draw = () => {
     el.innerHTML = `<div class="h2" style="margin-top:4px">Type de défi</div>
-    <div class="seg">${types.map(([k,t,d])=>`<button class="opt ${k===type?'on':''}" data-t="${k}"><b><span class="ico ${k==='tap'?'loc':k}">${ICON[k==='tap'?'loc':k]}</span>${t}</b><span>${d}</span></button>`).join('')}</div>
+    <div class="seg">${types.map(([k,t,d])=>`<button class="opt ${k===type?'on':''}" data-t="${k}"><b><span class="ico ${k==='tap'?'loc':k}">${ICON[k==='tap'?'loc':k]}</span><span class="tt">${t}</span></b><span>${d}</span></button>`).join('')}</div>
     <div class="h2">Zone</div><div class="chips" style="flex-wrap:wrap">${['WORLD',...CONT_ORDER].map(k=>`<button class="chip ${k===zone?'on':''}" data-z="${k}">${k==='WORLD'?'Monde entier':`<i style="background:${CONT[k].c}"></i>${CONT[k].n}`}</button>`).join('')}</div>
     <div class="h2">Nombre de questions</div><div class="chips">${[10,20,30].map(k=>`<button class="chip ${k===n?'on':''}" data-n="${k}">${k}</button>`).join('')}</div>
     <button class="next" id="start">Lancer le défi</button>`;
@@ -434,11 +484,10 @@ function vQuiz(el){
 
 /* ---------- À propos ---------- */
 function vAbout(el){
-  setTitle('Réglages & sources');
-  el.innerHTML = `<div class="panel"><b>Nouveaux pays par séance</b><div class="chips" style="margin-top:10px">${[2,3,5,8].map(k=>`<button class="chip ${k===(S.settings.newPer||3)?'on':''}" data-np="${k}">${k}</button>`).join('')}</div>
+  setTitle('À propos');
+  el.innerHTML = `<div class="panel"><b>Comment ça marche</b>
     <p class="small">Chaque nouveau pays apporte 4 questions (continent, drapeau, capitale, localisation). Les révisions suivent des intervalles croissants : 1, 3, 7, 16 puis 35 jours ; une erreur remet la question au début. Un pays est « maîtrisé » quand ses 4 défis ont réussi au moins 3 fois de suite.</p></div>
-    <div class="panel"><b>Sauvegarde</b><p class="small">La progression est enregistrée uniquement sur cet appareil (stockage local du navigateur). Elle n’est pas synchronisée.</p>
-    <button class="chip" id="exp">Exporter</button> <button class="chip" id="imp">Importer</button> <button class="chip" id="reset" style="background:#5a1515">Tout effacer</button></div>
+    <div class="panel"><b>Sauvegarde</b><p class="small">La progression est enregistrée uniquement sur cet appareil (stockage local du navigateur). Elle n’est pas synchronisée : utilise Exporter / Importer dans Paramètres pour la transférer.</p></div>
     <div class="panel"><b>Sources des données</b><p class="small">
     • Liste et numérotation des 194 pays : liste des emplacements (version française) de The World Game.<br>
     • Drapeaux : flag-icons (licence MIT).<br>
@@ -450,23 +499,73 @@ function vAbout(el){
     • Traits d’identité : rédigés pour l’app à partir de faits géographiques établis.<br>
     • Police : Montserrat (SIL Open Font License).</p>
     <p class="small">Application non officielle, inspirée d’un jeu de cartes de géographie ; sans lien avec ses éditeurs.</p></div>`;
-  el.querySelectorAll('[data-np]').forEach(b=>b.onclick=()=>{S.settings.newPer=+b.dataset.np;save();vAbout(el);});
-  $('#reset',el).onclick=()=>{ if(confirm('Effacer toute la progression ?')){ S={items:{},settings:{newPer:3},stats:{answered:0,correct:0,days:[]}}; save(); toast('Progression effacée'); } };
-  $('#exp',el).onclick=()=>{ const t=JSON.stringify(S); if (navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast('Copié dans le presse-papiers')); else prompt('Copie ce texte',t); };
-  $('#imp',el).onclick=()=>{ const t=prompt('Colle ici une sauvegarde exportée'); if(!t) return; try{ const s=JSON.parse(t); if(!s.items) throw 0; S=Object.assign(load(),s); save(); toast('Progression importée'); }catch(e){ toast('Sauvegarde invalide'); } };
 }
 
-const TABS = {home:vHome, quiz:vQuiz, deck:vDeck, map:vMap};
+/* ---------- Paramètres ---------- */
+function vSettings(el){
+  setTitle('Paramètres');
+  const seg = (k, opts, label) => `<div class="segc" role="radiogroup" aria-label="${label}">${opts.map(([v,t]) => { const on = String(P[k])===String(v); return `<button role="radio" aria-checked="${on}" class="${on?'on':''}" data-pk="${k}" data-pv="${v}">${t}</button>`; }).join('')}</div>`;
+  const row = (title, sub, ctl) => `<div class="setrow"><div class="lab"><div><b>${title}</b>${sub?`<small>${sub}</small>`:''}</div></div>${ctl}</div>`;
+  const np = S.settings.newPer || 3;
+  el.innerHTML = `
+  <div class="h2" style="margin-top:4px">Affichage</div>
+  <div class="setgroup">
+    ${row('Thème', 'Automatique suit le mode clair/sombre de l’iPhone.', seg('theme', [['light','☀ Jour'],['dark','☾ Nuit'],['auto','Auto']], 'Thème'))}
+    ${row('Taille du texte', 'S’ajoute au zoom de l’iPhone si besoin.', seg('fs', [['m','Normale'],['l','Grande'],['xl','Très grande']], 'Taille du texte'))}
+    ${row('Animations', 'Auto suit l’option « Réduire les animations » de l’iPhone.', seg('motion', [['auto','Auto'],['on','Activées'],['reduce','Réduites']], 'Animations'))}
+    ${row('Étiquettes sur la carte', 'Apparaissent en zoomant sur la carte du monde.', seg('labels', [['num','Numéros'],['name','Noms'],['none','Aucune']], 'Étiquettes sur la carte'))}
+  </div>
+  <div class="h2">Apprentissage</div>
+  <div class="setgroup">
+    ${row('Nouveaux pays par séance', 'Chaque nouveau pays apporte 4 questions.', `<div class="segc" role="radiogroup" aria-label="Nouveaux pays par séance">${[2,3,5,8].map(k=>`<button role="radio" aria-checked="${k===np}" class="${k===np?'on':''}" data-np="${k}">${k}</button>`).join('')}</div>`)}
+    ${row('Questions par défi', 'Nombre proposé par défaut dans Défis et pour les défis rapides.', seg('qn', [[10,'10'],[20,'20'],[30,'30']], 'Questions par défi'))}
+    <div class="setrow"><div class="lab"><div><b>Sons</b><small>Petit signal après chaque réponse. Muet si l’iPhone est en mode silencieux.</small></div><button class="switch" role="switch" aria-checked="${!!P.sound}" aria-label="Sons" data-sw="sound"></button></div></div>
+  </div>
+  <div class="h2">Progression</div>
+  <div class="setgroup">
+    <button class="setlink" id="exp"><span class="sl">Exporter la progression</span><span class="chev">›</span></button>
+    <button class="setlink" id="imp"><span class="sl">Importer une sauvegarde</span><span class="chev">›</span></button>
+    <button class="setlink danger" id="reset"><span class="sl">Réinitialiser la progression</span><span class="chev">›</span></button>
+  </div>
+  <div class="h2">À propos</div>
+  <div class="setgroup">
+    <button class="setlink" id="about"><span class="sl">Fonctionnement, sources et licences</span><span class="chev">›</span></button>
+    <button class="setlink" id="resetp"><span class="sl">Rétablir les réglages par défaut</span><span class="chev">›</span></button>
+  </div>
+  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 2 · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
+  const redraw = () => { const y = el.scrollTop; vSettings(el); el.scrollTop = y; };
+  el.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => { const k = b.dataset.pk; P[k] = k==='qn' ? +b.dataset.pv : b.dataset.pv; savePrefs(); redraw(); });
+  el.querySelectorAll('[data-np]').forEach(b => b.onclick = () => { S.settings.newPer = +b.dataset.np; save(); redraw(); });
+  el.querySelectorAll('[data-sw]').forEach(b => b.onclick = () => { const k = b.dataset.sw; P[k] = !P[k]; savePrefs(); if (k==='sound' && P[k]) beep(true); redraw(); });
+  $('#about',el).onclick = () => go(vAbout);
+  $('#resetp',el).onclick = () => { if (confirm('Rétablir les réglages par défaut (thème nuit, texte normal…) ? Ta progression est conservée.')) { P = Object.assign({}, PREF_DEF); savePrefs(); S.settings.newPer = 3; save(); redraw(); toast('Réglages rétablis'); } };
+  $('#reset',el).onclick = () => {
+    const n = C.filter(c=>seen(c.iso3)).length;
+    if (!confirm(`Effacer toute la progression (${n} pays découverts, révisions et série de jours) ? Cette action est définitive. Pense à exporter avant si besoin.`)) return;
+    S = {items:{}, settings:{newPer: S.settings.newPer || 3}, stats:{answered:0,correct:0,days:[]}}; save(); redraw(); toast('Progression effacée');
+  };
+  $('#exp',el).onclick = () => { const t = JSON.stringify(S); if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(()=>toast('Copié dans le presse-papiers'), ()=>prompt('Copie ce texte', t)); else prompt('Copie ce texte', t); };
+  $('#imp',el).onclick = () => { const t = prompt('Colle ici une sauvegarde exportée'); if (!t) return; try { const s = JSON.parse(t); if (!s.items) throw 0; S = Object.assign(load(), s); save(); redraw(); toast('Progression importée'); } catch(e){ toast('Sauvegarde invalide'); } };
+}
+
+const TABS = {home:vHome, quiz:vQuiz, deck:vDeck, map:vMap, settings:vSettings};
 
 /* ---------- Démarrage ---------- */
 async function init(){
+  applyPrefs();
   $('#back').onclick = back;
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => home(b.dataset.tab));
   const [cs, geo] = await Promise.all([fetch('data/countries.json').then(r=>r.json()), fetch('data/geo.json').then(r=>r.json())]);
   C = cs.sort((a,b)=>a.n-b.n); C.forEach(c=>BY[c.iso3]=c); GEO = geo; GEO.items.forEach(i=>GEOBY[i.id]=i);
   home('home');
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if ('serviceWorker' in navigator && location.protocol !== 'file:'){
+    // quand une nouvelle version s'installe, on recharge une fois pour l'afficher tout de suite
+    const had = !!navigator.serviceWorker.controller; let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloaded){ reloaded = true; location.reload(); } });
+    navigator.serviceWorker.register('sw.js').then(r => r.update && r.update()).catch(()=>{});
+  }
 }
-window.WorldGeo = { get state(){ return S; }, buildQ, BY:()=>BY };
+window.WorldGeo = { get state(){ return S; }, get prefs(){ return P; }, get beeps(){ return beeps; }, buildQ, BY:()=>BY,
+  /* aide aux tests automatisés */ _session(steps){ go(vSession, {steps, i:0, ok:0, n:0, title:'Test', srs:false}); } };
 init().catch(e => { $('#view').innerHTML = `<p class="loading">Erreur de chargement : ${esc(e.message)}</p>`; console.error(e); });
 })();
