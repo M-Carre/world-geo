@@ -1,6 +1,6 @@
 # World – Géo (PWA)
 
-App web installable sur iPhone pour apprendre les 194 pays du jeu : nom, capitale, drapeau, localisation, plus un trait d’identité par pays.
+App web installable sur iPhone pour apprendre les 194 pays du jeu (nom, capitale, drapeau, localisation, trait d’identité) et, depuis la v5, **205 végétaux et animaux de Munich** à reconnaître sur photo.
 Elle est en français, fonctionne hors ligne et enregistre la progression sur l’appareil.
 
 ## Installation sur iPhone
@@ -9,6 +9,33 @@ Elle est en français, fonctionne hors ligne et enregistre la progression sur l�
 3. Ouvrir l’app une fois en ligne : tout est mis en cache (environ 3,5 Mo) ; ensuite elle marche hors ligne.
 
 La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans l’onglet Paramètres.
+
+## Version 5 — Végétaux et animaux de Munich
+L’accueil a maintenant trois domaines : **Géographie**, **Végétaux de Munich** (106 espèces : arbres feuillus, conifères, arbustes et lianes, fleurs et herbacées) et **Animaux de Munich** (99 espèces : oiseaux, oiseaux d’eau, mammifères, insectes, papillons, araignées/amphibiens/reptiles/escargots). La liste complète est dans `ESPECES.md`.
+
+**Fonctionnement**
+- Introduction progressive façon Anki : **5 nouvelles espèces par jour** par défaut (3/5/8/12 dans Paramètres → Végétaux et animaux), les plus courantes à Munich d’abord ; limite de révisions par jour (60 par défaut).
+- Chaque nouvelle espèce est d’abord **présentée** (3 photos, noms FR/DE/latin, 3 critères diagnostiques, confusions possibles), puis interrogée une ou deux questions plus tard avec une photo **jamais vue**, puis rappelée en fin de séance.
+- Types de questions qui se durcissent avec la maturité de la carte FSRS : photo → nom (d’abord), puis nom → photo et critère → espèce, puis « laquelle est laquelle ? » (deux espèces proches côte à côte), puis 6 propositions au lieu de 4.
+- Propositions pièges tirées des **groupes de confusion** (même groupe, confusions déclarées, erreurs passées).
+- Après une erreur : les deux espèces côte à côte et **« Comment les distinguer »** ; l’espèce ratée revient dans la séance.
+- Photo différente à chaque révision (historique par espèce, jamais deux fois de suite la même).
+- Fiche espèce : galerie de 6 photos avec auteur et licence, critères, mois d’observation, où la voir à Munich, anecdote, **confusions cliquables** (retour = retour exact au défi), lien iNaturalist.
+- Catégories cliquables (à réviser, difficiles, en apprentissage, en consolidation, maîtrisées, à découvrir, visibles ce mois-ci), statistiques par domaine, prévision par jour, notes des 30 derniers jours.
+- Onglet **Sortie** : un « défi sortie » de saison, les espèces visibles ce mois-ci, et des liens vers iNaturalist, Flora Incognita et Merlin pour vérifier sur le terrain. Filtre de saison optionnel (fin novembre : arbres par l’écorce et la silhouette, oiseaux d’eau hivernants, oiseaux des mangeoires…).
+- Paramètres → « Comment apprendre » explique la méthode dans l’app.
+- Les cartes nature partagent le même moteur FSRS-6, la même sauvegarde (clé `N:<espèce>`) et l’export/import ; la progression v4 est conservée telle quelle.
+
+**Méthode (recherche sur l’apprentissage des catégories naturelles)**
+- *Exemples variés et entrelacés* : apprendre des peintres ou des oiseaux en mélangeant les catégories plutôt qu’en bloc améliore la reconnaissance de nouveaux exemples (Kornell & Bjork 2008, *Psychological Science* 19(6) ; Wahlheim, Dunlosky & Jacoby 2011, *Memory & Cognition* 39(5) sur les oiseaux ; Kang & Pashler 2012, *Applied Cognitive Psychology* 26). D’où plusieurs photos par espèce, jamais la même deux fois de suite, et des séances qui mélangent les espèces.
+- *Entrelacer surtout les espèces semblables* : le bénéfice tient à la comparaison entre catégories proches (Carvalho & Goldstone 2014, *Memory & Cognition* 42(3) ; Birnbaum, Kornell, Bjork & Bjork 2013, *Memory & Cognition* 41). D’où les groupes de confusion, les pièges proches et les questions « laquelle est laquelle ? ».
+- *Retour immédiat et contrastif* : montrer la bonne espèce à côté de celle choisie aide à apprendre les traits qui les séparent (Jacoby, Wahlheim & Coane 2010, *JEP:LMC* 36(6)).
+- *Récupération active et espacement* (FSRS-6, comme pour la géographie).
+- *Critères diagnostiques* explicites et *pont vers le terrain* (défi sortie, applis d’identification).
+
+**Photos** : 1 230 photos iNaturalist (6 par espèce) sous CC0, CC BY ou CC BY-SA, choisies parmi les observations de Munich/Haute-Bavière puis d’Europe, filtrées automatiquement (similarité image-texte CLIP, doublons) puis relues sur planches contact (mains, spécimens morts, plumes, figurines, sujets trop lointains retirés). WebP 600 px, ~28 Ko en moyenne, 34 Mo au total. Attributions : `LICENCES-PHOTOS.md`. Hors ligne : le code et les données sont précachés ; les photos sont mises en cache au fil de l’eau (espèces déjà vues + prochaines espèces), ou toutes d’un coup via Paramètres → « Télécharger toutes les photos ».
+
+**Installation des fichiers** : `world-app.zip` contient le code et les données ; les photos sont dans `world-photos-1.zip` et `world-photos-2.zip`. Décompresser les trois **dans le même dossier racine** de l’app (les zips photos contiennent `photos/<espèce>/<n>.webp`).
 
 ## Version 4
 - **Mode « Apprendre » masqué par défaut.** L'accueil ne propose plus « Apprendre le monde » ni « Apprendre par continent » ; le réglage Paramètres → Révisions → « Afficher le mode Apprendre » le rétablit. Les défis alimentent FSRS : chaque pays rencontré en défi devient une carte de mémoire.
@@ -50,5 +77,5 @@ Déposer le contenu de ce dossier (ou `world-app.zip`) à la racine d’un hébe
 `python3 -m http.server 8765` dans ce dossier, puis http://localhost:8765
 
 ## Structure
-`index.html`, `css/app.css`, `js/app.js` (vanilla JS, sans dépendance), `js/fsrs.js` (FSRS-6), `data/wiki.json` (textes Wikipédia), `data/countries.json`, `data/geo.json`, `flags/*.svg`, `fonts/`, `icons/`, `manifest.webmanifest`, `sw.js` (cache hors ligne versionné).
+`index.html`, `css/app.css`, `js/app.js` (vanilla JS, sans dépendance), `js/fsrs.js` (FSRS-6), `data/wiki.json` (textes Wikipédia), `data/countries.json`, `data/geo.json`, `flags/*.svg`, `fonts/`, `icons/`, `manifest.webmanifest`, `sw.js` (cache hors ligne versionné), `data/nature.json` (espèces), `photos/<espèce>/<n>.webp`.
 Sources et licences : voir `LICENCES.md`.
