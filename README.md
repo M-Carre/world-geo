@@ -10,6 +10,12 @@ Elle est en français, fonctionne hors ligne et enregistre la progression sur l�
 
 La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans l’onglet Paramètres.
 
+## Version 4
+- **Mode « Apprendre » masqué par défaut.** L'accueil ne propose plus « Apprendre le monde » ni « Apprendre par continent » ; le réglage Paramètres → Révisions → « Afficher le mode Apprendre » le rétablit. Les défis alimentent FSRS : chaque pays rencontré en défi devient une carte de mémoire.
+- **Accueil recentré** sur « Cartes à réviser » (réviser maintenant, réviser les cartes difficiles, 7 catégories touchables) et sur les **Défis** (5 défis rapides + personnaliser, défis par continent). Sur un continent, « Réviser ce continent » remplace la séance d'apprentissage.
+- **Catégories touchables partout** : tuiles de l'accueil et des statistiques, prévision par jour, maîtrise par compétence, notes des 30 derniers jours, étiquettes des fiches (maîtrisée, difficile, très difficile, en apprentissage, facile), badges des défis. Chacune ouvre la liste précise (pays + compétence, drapeau, rappel prédit, échéance, filtre par compétence) ; chaque ligne ouvre la fiche, « retour » restaure la liste (filtre et défilement) ; « Réviser ces cartes » lance une révision ciblée.
+- Tous les éléments touchables sont de vrais `<button>` (audit automatique sous WebKit avec gestes tactiles).
+
 ## Version 3
 - **Défi « continent » supprimé** (trop facile). L’ancienne progression de ce défi est archivée dans la sauvegarde, pas effacée.
 - **Révision espacée FSRS-6** (le modèle d’Anki, portage de py-fsrs 6.3.3, poids par défaut) à la place des boîtes fixes. Il y a une carte mémoire par pays et par compétence (capitale, drapeau, localisation), avec sa stabilité, sa difficulté, sa date de retour et ses erreurs.

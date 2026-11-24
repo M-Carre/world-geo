@@ -1,5 +1,5 @@
 'use strict';
-/* World – Géo v3 : PWA d'apprentissage des 194 pays (193 États de l'ONU + Vatican).
+/* World – Géo v4 : PWA d'apprentissage des 194 pays (193 États de l'ONU + Vatican).
    Répétition espacée : FSRS-6 (js/fsrs.js). */
 (() => {
 const CONT = {
@@ -66,7 +66,7 @@ function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(
 
 /* ---------- Préférences d'affichage (clé séparée, lue aussi par index.html avant l'affichage) ---------- */
 const PREF_KEY = 'worldgeo.prefs';
-const PREF_DEF = {theme:'dark', fs:'m', motion:'auto', labels:'num', qn:10, sound:false, retention:0.9, speed:'normal', revMax:25};
+const PREF_DEF = {theme:'dark', fs:'m', motion:'auto', labels:'num', qn:10, sound:false, retention:0.9, speed:'normal', revMax:25, learn:false};
 let P = loadPrefs();
 function loadPrefs(){ try { return Object.assign({}, PREF_DEF, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch(e){ return Object.assign({}, PREF_DEF); } }
 function savePrefs(){ try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch(e){} applyPrefs(); }
@@ -180,6 +180,53 @@ function memLine(cd){
   return `Rappel ${pct(recall(cd))} · revient ${relTime(cd.due)}${cd.due>Date.now()+DAY?' ('+fmtDate(cd.due)+')':''}`;
 }
 
+/* ---------- Catégories de cartes (cliquables partout : accueil, statistiques, fiches, badges) ---------- */
+// Une « carte » = un pays × une compétence. Chaque catégorie a un nom, une explication et un filtre.
+function allCards(){ const out = []; for (const k in S.cards){ const [iso,sk] = k.split(':'); if (BY[iso] && SKILLS[sk]) out.push({k, iso, sk, cd:S.cards[k]}); } return out; }
+const isEasy = cd => cd.state===2 && cd.d <= 4 && (cd.fails||0)===0;
+const isMasteredCd = cd => cd.state===2 && cd.s >= MASTER_S;
+const CATS = {
+  due:     {n:'À réviser maintenant', d:'Cartes arrivées à échéance (retards compris). La révision commence par les plus fragiles.', f:x => isDue(x.cd)},
+  today:   {n:'À réviser d’ici ce soir', d:'Cartes à échéance aujourd’hui, y compris celles qui reviennent dans quelques minutes.', f:x => x.cd.due < startOfDay(Date.now(),1)},
+  hard:    {n:'Difficiles', d:'Difficulté FSRS d’au moins 7/10 ou au moins 3 erreurs. Elles passent en priorité dans les révisions.', f:x => isHard(x.cd) || isLeech(x.cd)},
+  leech:   {n:'Très difficiles', d:'Cartes ratées encore et encore (au moins 4 erreurs, ou 2 oublis avec une difficulté de 8/10).', f:x => isLeech(x.cd)},
+  learning:{n:'En apprentissage', d:'Cartes récentes ou ratées récemment : elles reviennent à quelques minutes d’intervalle.', f:x => x.cd.state!==2},
+  review:  {n:'En consolidation', d:`Cartes en révision, pas encore maîtrisées (stabilité sous ${MASTER_S} jours).`, f:x => x.cd.state===2 && x.cd.s < MASTER_S},
+  easy:    {n:'Faciles', d:'Cartes en révision jamais ratées, de difficulté 4/10 au plus.', f:x => isEasy(x.cd)},
+  mastered:{n:'Maîtrisées', d:`Stabilité d’au moins ${MASTER_S} jours : la probabilité de t’en souvenir reste au-dessus de 90 % pendant ${MASTER_S} jours ou plus.`, f:x => isMasteredCd(x.cd)},
+  mcountry:{n:'Pays maîtrisés', d:'Pays dont les trois cartes (capitale, drapeau, localisation) sont maîtrisées.', f:x => mastered(x.iso)},
+  studied: {n:'Toutes les cartes étudiées', d:'Toutes les cartes déjà rencontrées en défi ou en révision.', f:() => true},
+  fresh:   {n:'Nouvelles', d:'Cartes jamais rencontrées. Elles entrent dans les révisions dès ta première réponse en défi.', virtual:true},
+  day:     {n:'À échéance', d:'Cartes qui reviennent ce jour-là.', f:(x,a) => { const t0 = startOfDay(Date.now(), a.day), t1 = startOfDay(Date.now(), a.day+1); return x.cd.due >= (a.day===0 ? -Infinity : t0) && x.cd.due < t1; }},
+  grade:   {n:'Note', d:'Cartes qui ont reçu cette note au moins une fois ces 30 derniers jours.', f:(x,a) => (a._g[x.k]||0) > 0},
+};
+const HOME_CATS = ['due','hard','learning','review','easy','mastered','fresh'];
+const DAYN = k => k===0 ? 'aujourd’hui' : k===1 ? 'demain' : new Date(startOfDay(Date.now(),k)).toLocaleDateString('fr-FR',{weekday:'long', day:'numeric', month:'long'});
+function catTitle(a){
+  const base = a.cat==='day' ? 'À échéance '+DAYN(a.day) : a.cat==='grade' ? `Notées « ${RATING_N[a.g]} »` : CATS[a.cat].n;
+  return base + (a.sk && SKILLS[a.sk] ? ' · '+SKILLS[a.sk].n : '');
+}
+// renvoie les cartes de la catégorie, triées (les plus fragiles d'abord)
+function catItems(a){
+  const now = Date.now(); const C0 = CATS[a.cat]; if (!C0) return [];
+  let items;
+  if (C0.virtual){
+    items = []; C.forEach(c => SK.forEach(sk => { if (!card(c.iso3,sk)) items.push({k:key(c.iso3,sk), iso:c.iso3, sk, cd:null, n:c.n}); }));
+    items.sort((x,y) => x.n-y.n || SK.indexOf(x.sk)-SK.indexOf(y.sk));
+  } else {
+    if (a.cat==='grade'){ a._g = {}; S.log.forEach(r => { if (r[0] > now-30*DAY && r[3]===a.g){ const k = key(r[1],r[2]); a._g[k] = (a._g[k]||0)+1; } }); }
+    items = allCards().filter(x => C0.f(x, a));
+    if (a.cat==='day' || a.cat==='today') items.sort((x,y) => x.cd.due-y.cd.due);
+    else items.sort((x,y) => priority(x.cd, now)-priority(y.cd, now));
+  }
+  if (a.sk && SKILLS[a.sk]) items = items.filter(x => x.sk===a.sk);
+  return items;
+}
+const catCount = a => catItems(a).length;
+// bouton de catégorie réutilisable : data-cat (+ data-sk / data-day / data-g)
+const catAttrs = a => `data-cat="${a.cat}"${a.sk?` data-sk="${a.sk}"`:''}${a.day!=null?` data-day="${a.day}"`:''}${a.g?` data-g="${a.g}"`:''}`;
+const catArgs = b => { const a = {cat:b.dataset.cat}; if (b.dataset.sk) a.sk = b.dataset.sk; if (b.dataset.day!=null) a.day = +b.dataset.day; if (b.dataset.g) a.g = +b.dataset.g; return a; };
+
 /* ---------- Formatage ---------- */
 function fmtArea(a){ return a < 10 ? a.toLocaleString('fr-FR',{maximumFractionDigits:2})+' km²' : nf.format(Math.round(a))+' km²'; }
 function fmtPop(p){
@@ -284,17 +331,31 @@ function hitTest(svg, cx, cy, x, y, s){
 const stack = [];
 const SNAPS = new Map(); const NAV_ID = Math.random().toString(36).slice(2,8); let navN = 0;
 function saveScroll(){ const top = stack[stack.length-1]; if (top) top.scroll = $('#view').scrollTop; }
-function pushHist(replace){
+// Safari limite pushState (environ 100 appels / 10 s) : si l'historique refuse l'entrée, la vue est marquée
+// et « retour » dépile alors directement dans l'app au lieu de passer par history.back().
+// Chaque vue retient l'entrée d'historique qui la porte (hid) et celle de la vue du dessous (prevHid) :
+// « retour » n'utilise history.back() que si les deux correspondent, sinon il dépile dans l'app.
+function pushHist(replace, replaced){
   const id = NAV_ID+'-'+(++navN); SNAPS.set(id, stack.slice());
-  try { history[replace?'replaceState':'pushState']({wg:id}, ''); } catch(e){}
+  const top = stack[stack.length-1], below = stack[stack.length-2];
+  if (!top) return;
+  const prev = replace ? (replaced ? replaced.prevHid : null) : (below ? below.hid : null);
+  try { history[replace?'replaceState':'pushState']({wg:id}, ''); top.hid = id; top.prevHid = prev; }
+  catch(e){ if (!replace) { top.hid = null; top.prevHid = null; } }
 }
 function go(fn, args={}, {replace=false}={}){
   saveScroll();
-  if (replace) stack.pop();
+  const replaced = replace ? stack.pop() : null;
   stack.push({fn, args, tab: stack[0] ? stack[0].tab : 'home'});
-  pushHist(replace); render(false);
+  pushHist(replace, replaced); render(false);
 }
-function back(){ if (stack.length > 1) history.back(); }
+function back(){
+  if (stack.length <= 1) return;
+  const top = stack[stack.length-1];
+  const below = stack[stack.length-2];
+  if (top.hid && history.state && history.state.wg === top.hid && top.prevHid && top.prevHid === below.hid) { history.back(); return; }
+  saveScroll(); stack.pop(); pushHist(true, below); render(true);
+}
 function home(tab='home'){ saveScroll(); stack.length = 0; stack.push({fn:TABS[tab], args:{}, tab}); pushHist(false); render(false); }
 window.addEventListener('popstate', e => {
   const id = e.state && e.state.wg; const snap = id && SNAPS.get(id);
@@ -319,29 +380,80 @@ const openCard = (iso, list) => go(vCard, {iso, list});
 function bindOpen(el){
   el.querySelectorAll('[data-open]').forEach(b => b.onclick = e => { e.stopPropagation(); openCard(b.dataset.open); });
   el.querySelectorAll('[data-zone-open]').forEach(b => b.onclick = e => { e.stopPropagation(); go(vZone, {z:b.dataset.zoneOpen}); });
+  el.querySelectorAll('[data-cat]').forEach(b => b.onclick = e => { e.stopPropagation(); go(vList, catArgs(b)); });
 }
 
-/* ---------- Écran d'accueil ---------- */
+/* ---------- Écran d'accueil : Défis et Cartes à réviser en avant ---------- */
+function catTile(a, label, n, cls=''){ return `<button class="cat ${cls}" ${catAttrs(a)} aria-label="${esc(label)} : ${n}, voir la liste"><b>${n}</b><span>${esc(label)}</span><i class="chev">›</i></button>`; }
+function nextDueText(){ let t = Infinity; for (const k in S.cards) t = Math.min(t, S.cards[k].due); return t===Infinity ? '' : ' · prochaine '+relTime(t); }
 function vHome(el){
   setTitle('');
-  const due = dueCards().length, m = C.filter(c=>mastered(c.iso3)).length, sn = C.filter(c=>seen(c.iso3)).length;
-  const zones = CONT_ORDER.map(z => { const cs = C.filter(c=>c.continent===z); const mm = cs.filter(c=>mastered(c.iso3)).length; const ss = cs.filter(c=>seen(c.iso3)).length;
-    return `<button class="zone" data-zone="${z}"><i class="sw" style="background:${CONT[z].c}"></i><div class="zn"><b>${CONT[z].n}</b><span>${cs.length} pays · ${ss} vus · ${mm} maîtrisés</span><div class="bar"><i style="width:${(mm/cs.length*100).toFixed(1)}%;background:${CONT[z].c}"></i></div></div><span class="chev">›</span></button>`; }).join('');
+  const due = dueCards().length, m = C.filter(c=>mastered(c.iso3)).length;
+  const cnt = {}; HOME_CATS.forEach(k => cnt[k] = catCount({cat:k}));
+  const zones = CONT_ORDER.map(z => { const cs = C.filter(c=>c.continent===z); const mm = cs.filter(c=>mastered(c.iso3)).length; const ss = cs.filter(c=>seen(c.iso3)).length; const dz = dueCards(z).length;
+    return `<button class="zone" data-zone="${z}"><i class="sw" style="background:${CONT[z].c}"></i><div class="zn"><b>${CONT[z].n}</b><span>${cs.length} pays · ${ss} vus · ${mm} maîtrisés${dz?` · ${dz} à réviser`:''}</span><div class="bar"><i style="width:${(mm/cs.length*100).toFixed(1)}%;background:${CONT[z].c}"></i></div></div><span class="chev">›</span></button>`; }).join('');
+  const quick = [['mix','mix','Mélange'],['cap','cap','Capitale'],['flag','flag','Drapeau'],['loc','loc','Localisation'],['tap','loc','Toucher la carte']];
+  const lab = {due:'à réviser', hard:'difficiles', learning:'en apprentissage', review:'en consolidation', easy:'faciles', mastered:'maîtrisées', fresh:'nouvelles'};
   el.innerHTML = `
-  <div class="logo"><div class="frame"><div class="w">WORLD</div></div><div class="g">GÉO</div><div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="tagline">194 PAYS À MAÎTRISER</div></div>
-  <div class="stats-row" id="statsrow" role="button" tabindex="0" aria-label="Voir les statistiques"><div class="stat"><b>${m}</b><span>maîtrisés / 194</span></div><div class="stat"><b>${sn}</b><span>découverts</span></div><div class="stat"><b>${streak()}</b><span>jours de suite</span></div></div>
-  <div class="h2">Aujourd'hui</div>
-  <button class="big-btn" id="rev"><div>Réviser<small>${due ? due+' carte'+(due>1?'s':'')+' à revoir, les plus fragiles d’abord' : 'Rien à revoir pour l’instant'}</small></div><span class="pill">${due}</span></button>
-  <button class="big-btn ghost" id="learnw"><div>Apprendre le monde<small>Nouveaux pays dans l’ordre des numéros</small></div><span>›</span></button>
-  <div class="h2">Apprendre par continent</div>${zones}
+  <div class="logo small"><div class="frame"><div class="w">WORLD</div></div><div class="g">GÉO</div><div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="tagline">194 PAYS À MAÎTRISER</div></div>
+  <div class="h2">Cartes à réviser</div>
+  <button class="big-btn" id="rev"><div>Réviser maintenant<small>${due ? due+' carte'+(due>1?'s':'')+' à revoir, les plus fragiles d’abord' : 'Rien à revoir pour l’instant'+nextDueText()}</small></div><span class="pill">${due}</span></button>
+  ${cnt.hard ? `<button class="big-btn ghost" id="revhard"><div>Réviser les cartes difficiles<small>${cnt.hard} carte${cnt.hard>1?'s':''} souvent ratée${cnt.hard>1?'s':''}, même si elles ne sont pas encore dues</small></div><span class="pill red">${cnt.hard}</span></button>` : ''}
+  <div class="cats">${HOME_CATS.map(k => catTile({cat:k}, lab[k], cnt[k], 'c-'+k)).join('')}</div>
+  <p class="small hintline">Touche une catégorie pour voir ses cartes et la réviser.</p>
+  <div class="h2">Défis</div>
+  <div class="seg quick">${quick.map(([k,ic,t])=>`<button class="opt" data-q="${k}"><b><span class="ico ${ic}">${ICON[ic]}</span><span class="tt">${t}</span></b><span>Monde · ${P.qn} questions</span></button>`).join('')}
+  <button class="opt more" id="quizcfg"><b><span class="tt">Personnaliser ›</span></b><span>Zone, type, nombre</span></button></div>
+  <div class="h2">Défis par continent</div>${zones}
+  ${P.learn ? `<div class="h2">Apprendre</div><button class="big-btn ghost" id="learnw"><div>Apprendre le monde<small>${S.settings.newPer||3} nouveaux pays par séance, dans l’ordre des numéros</small></div><span>›</span></button>` : ''}
   <div class="h2">Plus</div>
-  <button class="big-btn ghost" id="stats"><div>Statistiques<small>Prévisions, cartes difficiles, maîtrise par compétence</small></div><span>›</span></button>
+  <div class="stats-row">${catTile({cat:'mcountry'}, 'pays maîtrisés / 194', m)}${catTile({cat:'studied'}, 'cartes étudiées', allCards().length)}<button class="cat" id="streak" aria-label="Statistiques"><b>${streak()}</b><span>jours de suite</span><i class="chev">›</i></button></div>
+  <button class="big-btn ghost" id="stats"><div>Statistiques<small>Prévisions, catégories, maîtrise par compétence</small></div><span>›</span></button>
   <button class="big-btn ghost" id="about"><div>Paramètres<small>Thème, rétention cible, sons, sauvegarde</small></div><span>›</span></button>`;
   $('#rev',el).onclick = () => due ? startSession('WORLD',{reviewOnly:true}) : toast('Tout est à jour !');
-  $('#learnw',el).onclick = () => startSession('WORLD');
+  const rh = $('#revhard',el); if (rh) rh.onclick = () => startCat({cat:'hard'});
+  const lw = $('#learnw',el); if (lw) lw.onclick = () => startSession('WORLD');
   $('#about',el).onclick = () => home('settings');
-  $('#stats',el).onclick = $('#statsrow',el).onclick = () => go(vStats);
+  $('#stats',el).onclick = $('#streak',el).onclick = () => go(vStats);
+  $('#quizcfg',el).onclick = () => home('quiz');
+  el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => startQuiz({zone:'WORLD', type:b.dataset.q, n:P.qn}));
   el.querySelectorAll('.zone').forEach(b => b.onclick = () => go(vZone,{z:b.dataset.zone}));
+  bindOpen(el);
+}
+
+/* ---------- Liste d'une catégorie ---------- */
+function catRow(x, list){
+  const c = BY[x.iso], cd = x.cd, now = Date.now();
+  const info = !cd ? 'jamais rencontrée' : cd.state!==2 ? `${STATE_N[cd.state].toLowerCase()} · revient ${relTime(cd.due)}` : `rappel ${pct(recall(cd, now))} · revient ${relTime(cd.due)}${cd.due > now+DAY ? ' ('+fmtDate(cd.due)+')' : ''}`;
+  const tags = cd ? [isLeech(cd) ? '<em class="t-bad">très difficile</em>' : isHard(cd) ? '<em class="t-bad">difficile</em>' : '', isMasteredCd(cd) ? '<em class="t-ok">maîtrisée</em>' : '', (cd.fails||0) ? `<em>${cd.fails} erreur${cd.fails>1?'s':''}</em>` : ''].join('') : '';
+  return `<button class="lrow crow" data-iso="${x.iso}" data-k="${x.k}"><img loading="lazy" src="${flagSrc(c)}" alt=""><div><b>${esc(c.name)}</b><span><i class="ico sm ${x.sk}">${ICON[x.sk]}</i>${SKILLS[x.sk].n} · ${info}</span>${tags?`<span class="tags">${tags}</span>`:''}</div><span class="chev">›</span></button>`;
+}
+function vList(el, args){
+  setTitle(catTitle(args));
+  if (!CATS[args.cat]){ el.innerHTML = '<p class="small">Catégorie inconnue.</p>'; return; }
+  const items = catItems(args);
+  const counts = {}; SK.forEach(sk => counts[sk] = catCount(Object.assign({}, args, {sk})));
+  const total = SK.reduce((t,sk) => t+counts[sk], 0);
+  const LIM = 300; const shown = args.all ? items : items.slice(0, LIM);
+  const nRev = Math.min(items.length, P.revMax);
+  el.innerHTML = `<div class="panel catinfo"><b>${items.length} carte${items.length>1?'s':''}</b><p class="small">${esc(CATS[args.cat].d)}</p></div>
+    <div class="chips">${[['', 'Toutes', total], ...SK.map(sk => [sk, SKILLS[sk].n, counts[sk]])].map(([k,t,n]) => `<button class="chip ${(args.sk||'')===k?'on':''}" data-fsk="${k}">${t} · ${n}</button>`).join('')}</div>
+    ${items.length ? `<button class="next" id="catrev">${args.cat==='fresh' ? 'Découvrir' : 'Réviser'} ${nRev===items.length ? (nRev>1?'ces '+nRev+' cartes':'cette carte') : 'les '+nRev+' premières'}</button>` : ''}
+    <div class="panel list" id="clist">${items.length ? shown.map(x => catRow(x)).join('') : '<p class="small">Aucune carte dans cette catégorie pour l’instant.</p>'}
+    ${shown.length < items.length ? `<button class="chip" id="showall" style="margin:10px auto">Afficher les ${items.length} cartes</button>` : ''}</div>`;
+  const isos = [...new Set(shown.map(x => x.iso))];
+  el.querySelectorAll('.crow').forEach(b => b.onclick = () => go(vCard, {iso:b.dataset.iso, list:isos}));
+  el.querySelectorAll('[data-fsk]').forEach(b => b.onclick = () => { if (b.dataset.fsk) args.sk = b.dataset.fsk; else delete args.sk; go(vList, args, {replace:true}); });
+  const cr = $('#catrev',el); if (cr) cr.onclick = () => startCat(args);
+  const sa = $('#showall',el); if (sa) sa.onclick = () => { args.all = true; const y = el.scrollTop; vList(el, args); el.scrollTop = y; };
+}
+// révision ciblée sur une catégorie (les cartes non dues sont révisées en avance ; FSRS en tient compte)
+function startCat(a, replace=false){
+  const items = catItems(a).slice(0, P.revMax);
+  if (!items.length){ toast('Aucune carte dans cette catégorie'); return; }
+  const steps = items.map(x => ({type:'q', iso:x.iso, sk:x.sk, variant: !x.cd && x.sk==='loc' ? 'qcm' : !x.cd ? 'fwd' : null}));
+  const keep = {cat:a.cat}; ['sk','day','g'].forEach(k => { if (a[k]!=null) keep[k] = a[k]; });
+  go(vSession, {steps, i:0, ok:0, n:0, title:catTitle(a), srs:true, again:{kind:'cat', cat:keep}}, {replace});
 }
 
 function vZone(el,{z}){
@@ -349,12 +461,13 @@ function vZone(el,{z}){
   const cs = C.filter(c=>c.continent===z); const due = dueCards(z).length; const fresh = cs.filter(c=>!seen(c.iso3)).length;
   const quick = [['cap','cap','Capitale'],['flag','flag','Drapeau'],['loc','loc','Localisation'],['tap','loc','Toucher la carte']];
   el.innerHTML = `
-    <button class="big-btn" id="go" style="background:${CONT[z].c};color:${z==='AF'?'#000':'#fff'}"><div>Séance d’apprentissage<small style="color:inherit;opacity:.8">${due} à revoir · ${fresh} nouveaux pays restants</small></div><span>›</span></button>
+    ${P.learn ? `<button class="big-btn" id="go" style="background:${CONT[z].c};color:${z==='AF'?'#000':'#fff'}"><div>Séance d’apprentissage<small style="color:inherit;opacity:.8">${due} à revoir · ${fresh} nouveaux pays restants</small></div><span>›</span></button>`
+      : `<button class="big-btn" id="go" style="background:${CONT[z].c};color:${z==='AF'?'#000':'#fff'}"><div>Réviser ce continent<small style="color:inherit;opacity:.8">${due ? due+' carte'+(due>1?'s':'')+' à revoir' : 'Rien à revoir pour l’instant'}</small></div><span class="pill">${due}</span></button>`}
     <div class="seg">
       ${quick.map(([k,ic,t])=>`<button class="opt" data-q="${k}"><b><span class="ico ${ic}">${ICON[ic]}</span><span class="tt">${t}</span></b><span>Défi rapide · ${P.qn} questions</span></button>`).join('')}
     </div>
     <div class="h2">Les ${cs.length} cartes</div><div class="grid">${cs.map(miniCard).join('')}</div>`;
-  $('#go',el).onclick = () => startSession(z);
+  $('#go',el).onclick = () => P.learn ? startSession(z) : due ? startSession(z, {reviewOnly:true}) : toast('Ce continent est à jour !');
   el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => startQuiz({zone:z, type:b.dataset.q, n:P.qn}));
   bindMini(el);
 }
@@ -389,8 +502,10 @@ function wikiPanel(c){
 }
 function memPanel(c){
   const rows = SK.map(sk => { const cd = card(c.iso3,sk); const S0 = SKILLS[sk];
-    const det = cd && cd.s!=null ? `<small>Stabilité ${dec1(cd.s)} j · difficulté ${dec1(cd.d)}/10 · ${cd.reps||0} révision${(cd.reps||0)>1?'s':''} · ${cd.fails||0} erreur${(cd.fails||0)>1?'s':''}${isLeech(cd)?' · <b class="leech">carte difficile</b>':''}</small>` : '';
-    return `<div class="memrow"><span class="ico ${S0.cls}">${ICON[sk]}</span><div><b>${S0.n}${skillMastered(c.iso3,sk)?' <span class="okb">maîtrisée</span>':''}</b><span>${memLine(cd)}</span>${det}</div></div>`; }).join('');
+    const det = cd && cd.s!=null ? `<small>Stabilité ${dec1(cd.s)} j · difficulté ${dec1(cd.d)}/10 · ${cd.reps||0} révision${(cd.reps||0)>1?'s':''} · ${cd.fails||0} erreur${(cd.fails||0)>1?'s':''}</small>` : '';
+    const tags = cd ? [skillMastered(c.iso3,sk) ? `<button class="tag t-ok" ${catAttrs({cat:'mastered', sk})}>maîtrisée ›</button>` : '', isLeech(cd) ? `<button class="tag t-bad" ${catAttrs({cat:'leech'})}>très difficile ›</button>` : isHard(cd) ? `<button class="tag t-bad" ${catAttrs({cat:'hard'})}>difficile ›</button>` : '',
+      cd.state!==2 ? `<button class="tag" ${catAttrs({cat:'learning'})}>en apprentissage ›</button>` : '', isEasy(cd) ? `<button class="tag" ${catAttrs({cat:'easy'})}>facile ›</button>` : ''].join('') : '';
+    return `<div class="memrow"><span class="ico ${S0.cls}">${ICON[sk]}</span><div><b>${S0.n}</b><span>${memLine(cd)}</span>${det}${tags?`<div class="tags">${tags}</div>`:''}</div></div>`; }).join('');
   return `<div class="idbox mem"><div class="lbl">MÉMORISATION</div>${rows}<button class="chip" id="drill" style="margin-top:10px">Réviser ce pays (3 questions)</button></div>`;
 }
 function cardExtras(c, links=true){
@@ -462,39 +577,41 @@ function vMap(el, args){
   bindOpen(el);
 }
 
-/* ---------- Statistiques ---------- */
+/* ---------- Statistiques (chaque chiffre ouvre la liste de ses cartes) ---------- */
 function vStats(el){
   setTitle('Statistiques');
-  const now = Date.now(); const all = Object.entries(S.cards).filter(([k]) => SKILLS[k.split(':')[1]] && BY[k.split(':')[0]]);
-  const dueNow = dueCards().length;
-  const dueToday = all.filter(([,cd]) => cd.due < startOfDay(now,1)).length;
+  const now = Date.now(); const all = allCards();
+  const dueNow = dueCards().length, dueToday = catCount({cat:'today'});
   const m = C.filter(c=>mastered(c.iso3)).length;
-  const days = [...Array(7)].map((_,k) => { const a = k===0 ? -Infinity : startOfDay(now,k), b = startOfDay(now,k+1); return {k, n: all.filter(([,cd]) => cd.due >= a && cd.due < b).length, t: startOfDay(now,k)}; });
+  const days = [...Array(7)].map((_,k) => ({k, n: catCount({cat:'day', day:k}), t: startOfDay(now,k)}));
   const mx = Math.max(1, ...days.map(d=>d.n));
   const lg = S.log.filter(r => r[0] > now - 30*DAY); const lgRev = lg.filter(r => r[3] !== undefined);
   const succ = lgRev.length ? lgRev.filter(r=>r[3]>1).length/lgRev.length : null;
   const ratings = [1,2,3,4].map(g => lgRev.filter(r=>r[3]===g).length);
-  const skillRows = SK.map(sk => { const n = C.filter(c=>skillMastered(c.iso3,sk)).length, st = C.filter(c=>card(c.iso3,sk)).length;
-    return `<div class="skrow"><span class="ico ${sk}">${ICON[sk]}</span><div><b>${SKILLS[sk].n}</b><div class="bar"><i style="width:${(n/194*100).toFixed(1)}%;background:${SKILLS[sk].col}"></i></div><span>${n} maîtrisées · ${st} étudiées / 194</span></div></div>`; }).join('');
-  const hard = all.filter(([,cd]) => isLeech(cd) || isHard(cd)).sort((a,b) => (b[1].fails||0)-(a[1].fails||0) || b[1].d-a[1].d).slice(0,15);
-  const weak = all.filter(([,cd]) => cd.state===2 && cd.s!=null).map(([k,cd]) => [k,cd,recall(cd,now)]).sort((a,b)=>a[2]-b[2]).slice(0,8);
-  const row = (k, cd, extra) => { const [iso,sk] = k.split(':'); const c = BY[iso];
-    return `<button class="lrow" data-open="${iso}"><img src="${flagSrc(c)}" alt=""><div><b>${esc(c.name)}</b><span>${SKILLS[sk].n} · ${extra}</span></div><span class="chev">›</span></button>`; };
+  const skillRows = SK.map(sk => { const n = catCount({cat:'mastered', sk}), st = catCount({cat:'studied', sk}), h = catCount({cat:'hard', sk});
+    return `<div class="skrow"><span class="ico ${sk}">${ICON[sk]}</span><div><b>${SKILLS[sk].n}</b><div class="bar"><i style="width:${(n/194*100).toFixed(1)}%;background:${SKILLS[sk].col}"></i></div>
+      <div class="skl"><button class="tag t-ok" ${catAttrs({cat:'mastered', sk})}>${n} maîtrisée${n>1?'s':''} ›</button><button class="tag" ${catAttrs({cat:'studied', sk})}>${st} étudiée${st>1?'s':''} / 194 ›</button>${h?`<button class="tag t-bad" ${catAttrs({cat:'hard', sk})}>${h} difficile${h>1?'s':''} ›</button>`:''}</div></div></div>`; }).join('');
+  const hardAll = catItems({cat:'hard'}); const hard = hardAll.slice(0,10);
+  const weak = all.filter(x => x.cd.state===2 && x.cd.s!=null).map(x => Object.assign({r:recall(x.cd,now)}, x)).sort((a,b)=>a.r-b.r).slice(0,8);
+  const lab = {due:'à réviser', hard:'difficiles', learning:'en apprentissage', review:'en consolidation', easy:'faciles', mastered:'maîtrisées', fresh:'nouvelles'};
   el.innerHTML = `
-  <div class="stats-row"><div class="stat"><b>${dueNow}</b><span>à réviser maintenant</span></div><div class="stat"><b>${dueToday}</b><span>d’ici ce soir</span></div><div class="stat"><b>${m}</b><span>pays maîtrisés</span></div></div>
+  <div class="stats-row">${catTile({cat:'due'}, 'à réviser maintenant', dueNow)}${catTile({cat:'today'}, 'd’ici ce soir', dueToday)}${catTile({cat:'mcountry'}, 'pays maîtrisés', m)}</div>
   ${dueNow ? `<button class="next" id="revnow">Réviser maintenant (${dueNow})</button>` : ''}
+  <div class="h2">Catégories de cartes</div>
+  <div class="cats">${HOME_CATS.map(k => catTile({cat:k}, lab[k], catCount({cat:k}), 'c-'+k)).join('')}${catTile({cat:'leech'}, 'très difficiles', catCount({cat:'leech'}), 'c-hard')}</div>
   <div class="h2">Prochains jours</div>
-  <div class="panel"><div class="fc">${days.map(d=>`<div class="fcol"><span class="fn">${d.n}</span><i style="height:${Math.round(d.n/mx*100)}%"></i><span class="fd">${d.k===0?'auj.':d.k===1?'dem.':new Date(d.t).toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')}</span></div>`).join('')}</div>
-  <p class="small" style="margin:8px 0 0">Cartes qui arrivent à échéance chaque jour (aujourd’hui inclut les retards).</p></div>
+  <div class="panel"><div class="fc">${days.map(d=>`<button class="fcol" ${catAttrs({cat:'day', day:d.k})} aria-label="${d.n} cartes à échéance ${DAYN(d.k)}"><span class="fn">${d.n}</span><i style="height:${Math.round(d.n/mx*100)}%"></i><span class="fd">${d.k===0?'auj.':d.k===1?'dem.':new Date(d.t).toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','')}</span></button>`).join('')}</div>
+  <p class="small" style="margin:8px 0 0">Cartes qui arrivent à échéance chaque jour (aujourd’hui inclut les retards). Touche un jour pour voir ses cartes.</p></div>
   <div class="h2">Maîtrise par compétence</div><div class="panel">${skillRows}<p class="small" style="margin:8px 0 0">Une compétence est maîtrisée quand sa stabilité atteint ${MASTER_S} jours (le temps au bout duquel la probabilité de rappel tombe à 90 %).</p></div>
   <div class="h2">30 derniers jours</div>
   <div class="panel"><div class="kv"><span>Réponses</span><b>${lgRev.length}</b></div><div class="kv"><span>Taux de réussite</span><b>${succ==null?'—':pct(succ)}</b></div><div class="kv"><span>Rétention cible</span><b>${pct(P.retention)}</b></div>
-  <div class="kv"><span>Notes</span><b class="notes">${[1,2,3,4].map(g=>`<em class="g${g}">${RATING_N[g]} ${ratings[g-1]}</em>`).join(' ')}</b></div></div>
-  <div class="h2">Cartes difficiles (${hard.length})</div>
-  <div class="panel list">${hard.length ? hard.map(([k,cd]) => row(k, cd, `${cd.fails||0} erreur${(cd.fails||0)>1?'s':''} · difficulté ${dec1(cd.d)}/10${isLeech(cd)?' · sangsue':''}`)).join('') : '<p class="small">Aucune pour l’instant. Les cartes souvent ratées apparaîtront ici et passeront en priorité dans les révisions.</p>'}</div>
+  <div class="kv"><span>Notes</span><b class="notes">${[1,2,3,4].map(g=>`<button class="tag g${g}" ${catAttrs({cat:'grade', g})} aria-label="Cartes notées ${RATING_N[g]}">${RATING_N[g]} ${ratings[g-1]} ›</button>`).join('')}</b></div></div>
+  <div class="h2">Cartes difficiles (${hardAll.length})</div>
+  <div class="panel list">${hard.length ? hard.map(x => catRow(x)).join('') + (hardAll.length > hard.length ? `<button class="chip" style="margin:10px auto" ${catAttrs({cat:'hard'})}>Voir les ${hardAll.length} cartes difficiles ›</button>` : '') : '<p class="small">Aucune pour l’instant. Les cartes souvent ratées apparaîtront ici et passeront en priorité dans les révisions.</p>'}</div>
   <div class="h2">Rappel le plus fragile</div>
-  <div class="panel list">${weak.length ? weak.map(([k,cd,r]) => row(k, cd, `rappel ${pct(r)} · revient ${relTime(cd.due)}`)).join('') : '<p class="small">Rien encore : termine quelques séances.</p>'}</div>`;
+  <div class="panel list">${weak.length ? weak.map(x => catRow(x)).join('') : '<p class="small">Rien encore : termine quelques défis.</p>'}</div>`;
   bindOpen(el);
+  el.querySelectorAll('.crow').forEach(b => b.onclick = () => go(vCard, {iso:b.dataset.iso}));
   const rv = $('#revnow',el); if (rv) rv.onclick = () => startSession('WORLD',{reviewOnly:true});
 }
 
@@ -591,7 +708,7 @@ function vSession(el, st){
   }
   const q = step.q || (step.q = buildQ(step.iso, step.sk, step.variant));
   const c = BY[q.iso]; const S0 = SKILLS[q.sk]; const cd0 = card(q.iso, q.sk);
-  const badge = `<span class="badge" style="background:${S0.col}">${ICON[q.sk]} ${S0.n}</span>${isLeech(cd0)?'<span class="badge leechb">Carte difficile</span>':''}`;
+  const badge = `<button class="badge" style="background:${S0.col}" ${catAttrs({cat:'studied', sk:q.sk})} aria-label="${S0.n} : voir mes cartes de cette compétence">${ICON[q.sk]} ${S0.n}</button>${isLeech(cd0)?`<button class="badge leechb" ${catAttrs({cat:'leech'})} aria-label="Carte très difficile : voir la liste">Carte difficile ›</button>`:''}`;
   let body = '';
   if (q.flag) body += `<img class="qflag" src="${flagSrc(c)}" alt="Drapeau à identifier">`;
   if (q.kind==='loc') body += `<div class="qmap">${mapSVG(countryView(c.iso3, 4/3, 4.5, 330), {hl:c.iso3, hlColor:'#e5383f'})}</div>`;
@@ -601,6 +718,7 @@ function vSession(el, st){
   el.innerHTML = `<div class="qwrap">${progress}<div class="qcard">${badge}<div class="q">${esc(q.ask)}</div>${nameSub}${body}</div>
     ${q.kind==='tap' ? `<div class="fullmap tapmap" id="tm"></div><p class="hint" id="th">Glisse ou pince pour zoomer, puis touche le pays.</p>` : ''}
     ${answers}<div class="feedback" id="fb"></div></div>`;
+  bindOpen($('.qcard',el));
   let im = null;
   const showAnswered = fresh => {
     const a = step.ans;
@@ -663,10 +781,11 @@ function vSummary(el, st){
   $('#home',el).onclick = () => home('home');
   $('#back').hidden = true; $('#topright').textContent='';
   const a = st.again || {kind:'session', zone:'WORLD'};
-  $('#again',el).textContent = a.kind==='quiz' ? 'Rejouer ce défi' : a.kind==='drill' ? 'Réviser encore ce pays' : 'Continuer à apprendre';
+  $('#again',el).textContent = a.kind==='quiz' ? 'Rejouer ce défi' : a.kind==='drill' ? 'Réviser encore ce pays' : a.kind==='cat' ? 'Réviser encore cette catégorie' : a.reviewOnly ? 'Continuer à réviser' : 'Continuer à apprendre';
   $('#again',el).onclick = () => {
     if (a.kind==='quiz') return startQuiz(a, true);
     if (a.kind==='drill') return startDrill(a.iso, true);
+    if (a.kind==='cat') return startCat(a.cat, true);
     startSession(a.zone, a, true);
   };
   bindOpen(el); bindMini(el.querySelector('.grid'), isos);
@@ -699,7 +818,8 @@ function vAbout(el){
   el.innerHTML = `<div class="panel"><b>Comment fonctionnent les révisions</b>
     <p class="small">Chaque pays donne trois cartes de mémoire : capitale, drapeau et localisation. Chacune a sa propre <b>stabilité</b> (le nombre de jours au bout duquel la probabilité de t’en souvenir tombe à 90 %), sa <b>difficulté</b> (1 à 10), sa date d’échéance et son nombre d’erreurs.</p>
     <p class="small">Le planning est calculé par <b>FSRS-6</b> (Free Spaced Repetition Scheduler), l’algorithme utilisé par Anki, avec ses poids par défaut publiés. Pas besoin d’entraîner un modèle : la note de chaque réponse est déduite automatiquement — erreur = <i>À revoir</i>, bonne réponse lente = <i>Difficile</i>, normale = <i>Bien</i>, très rapide = <i>Facile</i> (seuils réglables dans Paramètres).</p>
-    <p class="small">Une carte ratée revient quelques questions plus loin dans la même séance, puis 10 minutes plus tard. Les révisions présentent d’abord les cartes dont le rappel est le plus fragile ; les cartes souvent ratées remontent en tête, et les propositions des QCM reprennent les pays que tu as déjà confondus.</p></div>
+    <p class="small">Une carte ratée revient quelques questions plus loin dans la même séance, puis 10 minutes plus tard. Les révisions présentent d’abord les cartes dont le rappel est le plus fragile ; les cartes souvent ratées remontent en tête, et les propositions des QCM reprennent les pays que tu as déjà confondus.</p>
+    <p class="small">Les défis alimentent directement ce système : chaque pays rencontré en défi devient une carte de mémoire. Les catégories (à réviser, difficiles, en apprentissage, en consolidation, faciles, maîtrisées, nouvelles) sont touchables partout : elles ouvrent la liste précise de leurs cartes, que tu peux réviser d’un geste.</p></div>
     <div class="panel"><b>Sauvegarde</b><p class="small">La progression est enregistrée uniquement sur cet appareil (stockage local du navigateur). Elle n’est pas synchronisée : utilise Exporter / Importer dans Paramètres pour la transférer.</p></div>
     <div class="panel"><b>Sources des données</b><p class="small">
     • Liste et numérotation des 194 pays : liste des emplacements (version française) de The World Game.<br>
@@ -735,7 +855,8 @@ function vSettings(el){
   <div class="setgroup">
     ${row('Rétention cible', 'Probabilité visée de se souvenir au moment de la révision. Plus haut = révisions plus fréquentes. S’applique aux prochaines réponses.', seg('retention', [[0.85,'85 %'],[0.9,'90 %'],[0.95,'95 %']], 'Rétention cible'))}
     ${row('Vitesse de réponse', `Seuils des notes pour une bonne réponse : Facile sous ${dec1(th[0])} s, Bien jusqu’à ${dec1(th[1])} s, Difficile au-delà (plus long pour les cartes à toucher).`, seg('speed', [['fast','Rapide'],['normal','Normale'],['slow','Lente']], 'Vitesse de réponse'))}
-    ${row('Nouveaux pays par séance', 'Chaque nouveau pays apporte 3 cartes : capitale, drapeau, localisation.', `<div class="segc" role="radiogroup" aria-label="Nouveaux pays par séance">${[2,3,5,8].map(k=>`<button role="radio" aria-checked="${k===np}" class="${k===np?'on':''}" data-np="${k}">${k}</button>`).join('')}</div>`)}
+    <div class="setrow"><div class="lab"><div><b>Afficher le mode Apprendre</b><small>Séances guidées qui présentent de nouveaux pays dans l’ordre des numéros. Désactivé : les défis suffisent, et chaque pays rencontré en défi entre dans les révisions.</small></div><button class="switch" role="switch" aria-checked="${!!P.learn}" aria-label="Afficher le mode Apprendre" data-sw="learn"></button></div></div>
+    ${P.learn ? row('Nouveaux pays par séance', 'Mode Apprendre : chaque nouveau pays apporte 3 cartes (capitale, drapeau, localisation).', `<div class="segc" role="radiogroup" aria-label="Nouveaux pays par séance">${[2,3,5,8].map(k=>`<button role="radio" aria-checked="${k===np}" class="${k===np?'on':''}" data-np="${k}">${k}</button>`).join('')}</div>`) : ''}
     ${row('Révisions max par séance', 'Les cartes en retard au-delà restent pour la séance suivante.', seg('revMax', [[15,'15'],[25,'25'],[40,'40']], 'Révisions max par séance'))}
     ${row('Questions par défi', 'Nombre proposé par défaut dans Défis et pour les défis rapides.', seg('qn', [[10,'10'],[20,'20'],[30,'30']], 'Questions par défi'))}
     <div class="setrow"><div class="lab"><div><b>Sons</b><small>Petit signal après chaque réponse. Muet si l’iPhone est en mode silencieux.</small></div><button class="switch" role="switch" aria-checked="${!!P.sound}" aria-label="Sons" data-sw="sound"></button></div></div>
@@ -752,7 +873,7 @@ function vSettings(el){
     <button class="setlink" id="about"><span class="sl">Fonctionnement, sources et licences</span><span class="chev">›</span></button>
     <button class="setlink" id="resetp"><span class="sl">Rétablir les réglages par défaut</span><span class="chev">›</span></button>
   </div>
-  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 3 · ${FSRS.VERSION} · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
+  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 4 · ${FSRS.VERSION} · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
   const redraw = () => { const y = el.scrollTop; vSettings(el); el.scrollTop = y; };
   const NUM = new Set(['qn','retention','revMax']);
   el.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => { const k = b.dataset.pk; P[k] = NUM.has(k) ? +b.dataset.pv : b.dataset.pv; savePrefs(); redraw(); });
@@ -802,6 +923,6 @@ async function init(){
 window.WorldGeo = { get state(){ return S; }, get prefs(){ return P; }, get beeps(){ return beeps; }, get stackDepth(){ return stack.length; }, buildQ, BY:()=>BY,
   dueCards, gradeOf, importData, migrate, sched,
   /* aides aux tests automatisés */ _session(steps, srs=false){ go(vSession, {steps, i:0, ok:0, n:0, title:'Test', srs}); },
-  _args(){ const t = stack[stack.length-1]; return t ? t.args : null; }, _top(){ const t = stack[stack.length-1]; return t ? t.fn.name : null; } };
+  _cat: a => catItems(a).map(x => x.k), _args(){ const t = stack[stack.length-1]; return t ? t.args : null; }, _top(){ const t = stack[stack.length-1]; return t ? t.fn.name : null; } };
 init().catch(e => { $('#view').innerHTML = `<p class="loading">Erreur de chargement : ${esc(e.message)}</p>`; console.error(e); });
 })();
