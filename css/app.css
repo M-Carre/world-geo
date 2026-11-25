@@ -466,3 +466,28 @@ html.lb-open,html.lb-open body{overflow:hidden}
 .lb-cap span{color:#999}
 .lb-close{flex:none;background:#fff;color:#111;font-weight:800;border-radius:999px;padding:10px 16px;min-height:44px}
 .conf img,.lrow.srow img{object-fit:contain;background:var(--phbg-card)}
+
+/* ===== v5.2 : sons d'animaux ===== */
+.snd{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 14px;border-radius:999px;background:var(--animal);color:#fff;font-weight:800;font-size:.875rem;overflow:hidden;max-width:100%;text-align:left}
+.snd .sl{min-width:0;overflow-wrap:anywhere;position:relative;z-index:1}
+.snd .pi{flex:none;position:relative;z-index:1}
+.snd .i-pause{display:none}
+.snd.playing .i-play{display:none}.snd.playing .i-pause{display:inline}
+.snd .bar{position:absolute;left:0;bottom:0;height:4px;width:var(--p,0%);background:rgba(255,255,255,.85);transition:width .25s linear}
+.snd.playing{box-shadow:0 0 0 3px rgba(192,112,42,.35)}
+.snd.big{display:flex;width:100%;justify-content:center;min-height:64px;font-size:1.0625rem;border-radius:18px}
+.snd.big .pi{width:28px;height:28px}
+.sndbox .sndrow{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-top:8px}
+.sndbox .attr,.sndrow small.attr{font-size:.625rem;color:var(--sub);overflow-wrap:anywhere}
+.sndbox .attr a{color:var(--sub);text-decoration:none}
+.qsnd{margin-top:12px}
+.qsnd .small{text-align:center;margin:6px 0 0;color:#555}
+.qphoto.small img{max-height:min(30vh,260px)}
+.answers.sndpick{grid-template-columns:minmax(0,1fr)}
+.sprow{display:flex;gap:8px;align-items:stretch;min-width:0}
+.sprow .snd{flex:1 1 auto;min-width:0;border-radius:14px}
+.sprow .ans.pick{flex:0 1 auto;min-width:0;min-height:44px;padding:8px 14px;flex-direction:column;justify-content:center;gap:2px;text-align:center}
+.sprow .ans.pick .cap{font-size:.6875rem;font-weight:600;overflow-wrap:anywhere}
+.sprow .ans.pick .cap:empty{display:none}
+.sndfb{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.sndans .cap b{font-size:.8125rem}

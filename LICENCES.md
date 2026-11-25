@@ -17,5 +17,6 @@ Application personnelle, non officielle, inspirée d’un jeu de cartes de géog
 | Algorithme de révision espacée (`js/fsrs.js`) | Portage JavaScript de **FSRS-6** d’après **py-fsrs 6.3.3** (Open Spaced Repetition, https://github.com/open-spaced-repetition/py-fsrs), avec les 21 poids par défaut publiés ; formules décrites dans le wiki awesome-fsrs, « The Algorithm » (https://github.com/open-spaced-repetition/awesome-fsrs/wiki/The-Algorithm) | MIT (Copyright © Open Spaced Repetition) |
 | Fiches d’espèces (noms FR/DE, critères, confusions, lieux, saisons, défis sortie, `data/nature.json`) | Rédigées pour l’app (noms scientifiques et identifiants de taxons : iNaturalist) | — |
 | Photos d’espèces (`photos/`, 1 230 fichiers) | iNaturalist, photographes cités un par un dans **`LICENCES-PHOTOS.md`** et sous chaque photo dans l’app | CC BY 4.0, CC BY-SA 4.0 ou CC0 selon la photo (aucune NC/ND) |
+| Sons d’animaux (`sounds/`, 180 extraits, 64 espèces) | iNaturalist (178) et Wikimedia Commons (2), auteurs cités un par un dans **`LICENCES-SONS.md`** et sous chaque bouton « Écouter » dans l’app | CC BY 4.0, CC BY-SA 4.0 ou CC0 selon l’enregistrement (aucune NC/ND) |
 
 Les tests unitaires de `js/fsrs.js` comparent ses sorties à celles de py-fsrs 6.3.3 exécuté en Python.

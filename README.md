@@ -10,6 +10,22 @@ Elle est en français, fonctionne hors ligne et enregistre la progression sur l�
 
 La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans l’onglet Paramètres.
 
+## Version 5.2 — chants et cris
+- **64 animaux ont un son** : 58 oiseaux, plus renard, chevreuil (aboiement), sanglier, écureuil, crapaud commun et grenouille rousse. Chacun a 1 à 3 extraits différents, 180 en tout, entre 3 et 12 s (10,5 s en moyenne), pour 14 Mo. Les insectes, papillons, escargots, araignées et reptiles de la liste n'ont pas de son caractéristique : ils n'en ont pas.
+- **Fiche et introduction** : bloc « Chant et cris » avec un bouton lecture/pause par extrait, une barre d'avancement, l'auteur, la licence et le lien source. **Corrigé** : « Écouter » la bonne espèce, et après une erreur aussi l'espèce choisie, pour comparer.
+- **Nouvelles questions**, réservées aux espèces qui ont un son :
+  - « Quel animal fait ce son ? » : 4 propositions avec photo et nom. Elle apparaît quand la stabilité FSRS de la carte atteint 2 jours.
+  - « Quel est son chant ou son cri ? » : photo et nom, puis 3 sons (4 à partir de 8 jours de stabilité), chacun avec « Écouter » et « Choisir ». Elle apparaît à partir de 5 jours de stabilité.
+  - Les pièges sont des espèces proches qui ont un son : confusions passées, sosies de la fiche, même groupe (les mésanges entre elles).
+  - Dans le mélange, une carte bien connue reçoit environ 1 question sur 4 en son, une carte jeune aucune. Les questions sonores sont notées par FSRS comme les autres, avec des seuils de temps plus longs, puisqu'il faut écouter.
+  - Défi « Chants et cris » dans Défis (animaux).
+- **Lecture** : uniquement au toucher, jamais automatique. Un seul son à la fois : en lancer un arrête le précédent, et changer d'écran ou de question coupe le son.
+  - **Mode silencieux de l'iPhone** : les sons passent par le lecteur audio de Safari (élément `<audio>`) et l'app demande `navigator.audioSession.type = 'playback'` (iOS 17 et plus) : en principe ils restent audibles, au volume « médias ». Si le volume est à zéro, on n'entend rien, mais rien ne casse : le bouton, l'indicateur et les réponses marchent. Le petit bip des réponses (Paramètres → Signal des réponses) reste muet en mode silencieux. Ce comportement n'a pas pu être vérifié sur un vrai iPhone.
+- **Réglage « Questions sonores »** (Paramètres → Végétaux et animaux), actif par défaut : quand il est coupé, plus aucune question sonore ni défi « Chants et cris ». Les boutons « Écouter » des fiches restent, et ne jouent que si on les touche.
+- **Hors ligne** : les sons sont exclus du précache. Ils vont dans un cache séparé `worldsounds-v1` à la première écoute, ou tous d'un coup avec « Télécharger tous les sons pour le hors-ligne (≈ 14 Mo) ». Le service worker répond aux requêtes partielles (Range → 206) qu'exige Safari pour l'audio.
+- **Sources** : iNaturalist (178 extraits) et Wikimedia Commons (2), sous CC BY 136, CC0 40, CC BY-SA 4. Le détail est dans `LICENCES-SONS.md`. xeno-canto n'a pas servi : son API exige une clé et la plupart de ses enregistrements sont sous licence NC.
+- **Installation** : `world-sounds-1.zip` contient `sounds/<espèce>/<n>.m4a`. Le décompresser à la racine de l'app, comme les zips de photos.
+
 ## Version 5.1 — photos entières
 - Les photos d’espèces ne sont plus recadrées : elles s’affichent entières (`object-fit: contain`, fond neutre selon le thème), dans des cases au format de chaque photo. C’est le cas partout : grilles de réponses, question photo → nom, introduction, corrigé, fiche, liste et confusions.
 - Grilles « quelle photo ? » et « laquelle est laquelle ? » : 2 colonnes seulement si chaque photo garde au moins 150 px de large, sinon 1 colonne pleine largeur (on fait défiler).
@@ -83,5 +99,5 @@ Déposer le contenu de ce dossier (ou `world-app.zip`) à la racine d’un hébe
 `python3 -m http.server 8765` dans ce dossier, puis http://localhost:8765
 
 ## Structure
-`index.html`, `css/app.css`, `js/app.js` (vanilla JS, sans dépendance), `js/fsrs.js` (FSRS-6), `data/wiki.json` (textes Wikipédia), `data/countries.json`, `data/geo.json`, `flags/*.svg`, `fonts/`, `icons/`, `manifest.webmanifest`, `sw.js` (cache hors ligne versionné), `data/nature.json` (espèces), `photos/<espèce>/<n>.webp`.
+`index.html`, `css/app.css`, `js/app.js` (vanilla JS, sans dépendance), `js/fsrs.js` (FSRS-6), `data/wiki.json` (textes Wikipédia), `data/countries.json`, `data/geo.json`, `flags/*.svg`, `fonts/`, `icons/`, `manifest.webmanifest`, `sw.js` (cache hors ligne versionné), `data/nature.json` (espèces), `photos/<espèce>/<n>.webp`, `sounds/<espèce>/<n>.m4a`.
 Sources et licences : voir `LICENCES.md`.

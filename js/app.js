@@ -1,5 +1,5 @@
 'use strict';
-/* World – Géo v5.1 : PWA d'apprentissage des 194 pays (193 États de l'ONU + Vatican) et des végétaux et animaux de Munich.
+/* World – Géo v5.2 : PWA d'apprentissage des 194 pays (193 États de l'ONU + Vatican) et des végétaux et animaux de Munich.
    Répétition espacée : FSRS-6 (js/fsrs.js). */
 (() => {
 const CONT = {
@@ -66,7 +66,7 @@ function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(
 
 /* ---------- Préférences d'affichage (clé séparée, lue aussi par index.html avant l'affichage) ---------- */
 const PREF_KEY = 'worldgeo.prefs';
-const PREF_DEF = {theme:'dark', fs:'m', motion:'auto', labels:'num', qn:10, sound:false, retention:0.9, speed:'normal', revMax:25, learn:false, dom:'geo', natNew:5, natRevDay:60, season:false};
+const PREF_DEF = {theme:'dark', fs:'m', motion:'auto', labels:'num', qn:10, sound:false, retention:0.9, speed:'normal', revMax:25, learn:false, dom:'geo', natNew:5, natRevDay:60, season:false, natSound:true};
 let P = loadPrefs();
 function loadPrefs(){ try { return Object.assign({}, PREF_DEF, JSON.parse(localStorage.getItem(PREF_KEY)) || {}); } catch(e){ return Object.assign({}, PREF_DEF); } }
 function savePrefs(){ try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch(e){} applyPrefs(); }
@@ -369,7 +369,7 @@ function render(restore){
   const app = document.getElementById('app');
   app.classList.toggle('quizmode', inSession());
   $('#back').hidden = stack.length<=1; $('#topright').textContent='';
-  view.scrollTop = 0; top.fn(view, top.args);
+  sndStop(); view.scrollTop = 0; top.fn(view, top.args);
   if (restore && top.scroll) view.scrollTop = top.scroll;
   setTab(stack[0].tab || 'home'); updateTabs();
 }
@@ -868,14 +868,16 @@ function vSettings(el){
     ${P.learn ? row('Nouveaux pays par séance', 'Mode Apprendre : chaque nouveau pays apporte 3 cartes (capitale, drapeau, localisation).', `<div class="segc" role="radiogroup" aria-label="Nouveaux pays par séance">${[2,3,5,8].map(k=>`<button role="radio" aria-checked="${k===np}" class="${k===np?'on':''}" data-np="${k}">${k}</button>`).join('')}</div>`) : ''}
     ${row('Révisions max par séance', 'Les cartes en retard au-delà restent pour la séance suivante.', seg('revMax', [[15,'15'],[25,'25'],[40,'40']], 'Révisions max par séance'))}
     ${row('Questions par défi', 'Nombre proposé par défaut dans Défis et pour les défis rapides.', seg('qn', [[10,'10'],[20,'20'],[30,'30']], 'Questions par défi'))}
-    <div class="setrow"><div class="lab"><div><b>Sons</b><small>Petit signal après chaque réponse. Muet si l’iPhone est en mode silencieux.</small></div><button class="switch" role="switch" aria-checked="${!!P.sound}" aria-label="Sons" data-sw="sound"></button></div></div>
+    <div class="setrow"><div class="lab"><div><b>Signal des réponses</b><small>Petit bip après chaque réponse. Muet si l’iPhone est en mode silencieux.</small></div><button class="switch" role="switch" aria-checked="${!!P.sound}" aria-label="Signal des réponses" data-sw="sound"></button></div></div>
   </div>
   ${NAT ? `<div class="h2">Végétaux et animaux</div>
   <div class="setgroup">
     ${row('Nouvelles espèces par jour', 'Par domaine (végétaux, animaux). Elles arrivent dans la séance du jour, les plus courantes d’abord.', seg('natNew', [[3,'3'],[5,'5'],[8,'8'],[12,'12']], 'Nouvelles espèces par jour'))}
     ${row('Révisions par jour', 'Limite quotidienne par domaine ; le reste attend le lendemain.', seg('natRevDay', [[30,'30'],[60,'60'],[100,'100'],[999,'∞']], 'Révisions par jour'))}
     <div class="setrow"><div class="lab"><div><b>Filtre saisonnier</b><small>Donne la priorité aux espèces visibles ce mois-ci autour de Munich (nouvelles espèces et défis).</small></div><button class="switch" role="switch" aria-checked="${!!P.season}" aria-label="Filtre saisonnier" data-sw="season"></button></div></div>
+    <div class="setrow"><div class="lab"><div><b>Questions sonores</b><small>Questions « quel animal fait ce son ? » et « quel est son chant ? » (${NAT ? NAT.species.filter(hasSnd).length : 0} espèces). Coupe-les en public ; les boutons « Écouter » restent sur les fiches. Aucun son ne démarre tout seul.</small></div><button class="switch" role="switch" aria-checked="${P.natSound!==false}" aria-label="Questions sonores" data-sw="natSound"></button></div></div>
     <button class="setlink" id="warmall"><span class="sl">Télécharger toutes les photos pour le hors-ligne (≈ 34 Mo)</span><span class="chev">›</span></button>
+    <button class="setlink" id="warmsnd"><span class="sl">Télécharger tous les sons pour le hors-ligne (≈ ${NAT ? sndMB() : 14} Mo)</span><span class="chev">›</span></button>
     <button class="setlink" id="howto"><span class="sl">Comment apprendre</span><span class="chev">›</span></button>
   </div>` : ''}
   <div class="h2">Progression</div>
@@ -890,7 +892,7 @@ function vSettings(el){
     <button class="setlink" id="about"><span class="sl">Fonctionnement, sources et licences</span><span class="chev">›</span></button>
     <button class="setlink" id="resetp"><span class="sl">Rétablir les réglages par défaut</span><span class="chev">›</span></button>
   </div>
-  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 5.1 · ${FSRS.VERSION} · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
+  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 5.2 · ${FSRS.VERSION} · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
   const redraw = () => { const y = el.scrollTop; vSettings(el); el.scrollTop = y; };
   const NUM = new Set(['qn','retention','revMax','natNew','natRevDay']);
   el.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => { const k = b.dataset.pk; P[k] = NUM.has(k) ? +b.dataset.pv : b.dataset.pv; savePrefs(); redraw(); });
@@ -898,6 +900,7 @@ function vSettings(el){
   el.querySelectorAll('[data-sw]').forEach(b => b.onclick = () => { const k = b.dataset.sw; P[k] = !P[k]; savePrefs(); if (k==='sound' && P[k]) beep(true); redraw(); });
   $('#about',el).onclick = () => go(vAbout);
   $('#stats',el).onclick = () => domK() ? go(vNatStats, {k:domK()}) : go(vStats);
+  const ws = $('#warmsnd',el); if (ws) ws.onclick = () => { toast('Téléchargement des sons…'); sndWarm().then(n => toast(n ? n+' sons enregistrés' : 'Sons déjà disponibles hors ligne')); };
   const wa = $('#warmall',el); if (wa) wa.onclick = () => { toast('Téléchargement des photos…'); natWarm(true).then(n => toast(n ? n+' photos enregistrées' : 'Photos déjà disponibles hors ligne')); };
   const ht = $('#howto',el); if (ht) ht.onclick = () => go(vHowTo);
   $('#resetp',el).onclick = () => { if (confirm('Rétablir les réglages par défaut (thème nuit, rétention 90 %…) ? Ta progression est conservée.')) { P = Object.assign({}, PREF_DEF); savePrefs(); S.settings.newPer = 3; save(); redraw(); toast('Réglages rétablis'); } };
@@ -929,8 +932,9 @@ const TABS = {home:vHome, quiz:vQuiz, deck:vDeck, map:vMap, settings:vSettings};
    ========================================================================== */
 let NAT = null; const NBY = {};
 const DOMS = {geo:{n:'Géographie', s:'Géo', ic:'◍'}, plant:{n:'Végétaux de Munich', s:'Végétaux', ic:'❦'}, animal:{n:'Animaux de Munich', s:'Animaux', ic:'❋'}};
-const NQT = {mix:'Mélange', photo:'Photo → nom', name:'Nom → photo', comp:'Espèces proches', crit:'Critère → espèce'};
-const NQT_D = {mix:'Tous les types, selon ta maîtrise', photo:'Reconnais l’espèce sur une photo', name:'Choisis la bonne photo', comp:'Deux espèces faciles à confondre', crit:'Retrouve l’espèce à partir d’un critère'};
+const NQT = {mix:'Mélange', photo:'Photo → nom', name:'Nom → photo', comp:'Espèces proches', crit:'Critère → espèce', sound:'Chants et cris'};
+const NQL = {snd:'Son → espèce', sndpick:'Espèce → son'};
+const NQT_D = {mix:'Tous les types, selon ta maîtrise', photo:'Reconnais l’espèce sur une photo', name:'Choisis la bonne photo', comp:'Deux espèces faciles à confondre', crit:'Retrouve l’espèce à partir d’un critère', sound:'Reconnais un animal à son chant, ou retrouve son chant'};
 const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
 const nkey = id => 'N:'+id;
 const ncard = id => S.cards[nkey(id)];
@@ -952,6 +956,54 @@ function natFresh(k){ let L = natOf(k).filter(sp => !ncard(sp.id)); if (P.season
 const natMastered = k => natCards(k).filter(x => isMasteredCd(x.cd)).length;
 const ph = (sp, i) => sp.photos[i] || sp.photos[0];
 const sp0 = id => NBY[id];
+/* ---------- Sons (v5.2) : un seul lecteur pour toute l'app, lecture uniquement au toucher ---------- */
+const hasSnd = sp => !!(sp && sp.sounds && sp.sounds.length);
+const sndOn = () => P.natSound !== false;
+let AUD = null, AUDKEY = null;
+function sndEl(){
+  if (!AUD){ AUD = new Audio(); AUD.preload = 'none';
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e){}
+    const upd = () => document.querySelectorAll('.snd[data-snd]').forEach(b => { const on = b.dataset.snd===AUDKEY && !AUD.paused && !AUD.ended;
+      b.classList.toggle('playing', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const pr = AUD.duration > 0 && b.dataset.snd===AUDKEY ? Math.min(100, AUD.currentTime / AUD.duration * 100) : 0; b.style.setProperty('--p', pr.toFixed(1)+'%'); });
+    ['play','playing','pause','ended','timeupdate','emptied'].forEach(n => AUD.addEventListener(n, upd));
+    AUD.addEventListener('error', () => { if (AUDKEY){ toast(navigator.onLine===false ? 'Son pas encore enregistré pour le hors-ligne' : 'Lecture impossible'); AUDKEY = null; upd(); } });
+    AUD._upd = upd; }
+  return AUD;
+}
+function sndStop(){ if (AUD && AUDKEY){ AUD.pause(); AUDKEY = null; AUD._upd(); } }
+function sndToggle(key){
+  const a = sndEl(); const [id, i] = key.split(':'); const sp = NBY[id]; if (!hasSnd(sp)) return;
+  if (AUDKEY===key && !a.paused){ a.pause(); return; }
+  if (AUDKEY===key && a.paused && !a.ended && a.currentTime > 0){ a.play().catch(()=>{}); return; }
+  a.pause(); AUDKEY = key; a.src = sp.sounds[+i||0].f; a.currentTime = 0;
+  const pr = a.play(); if (pr && pr.catch) pr.catch(e => { if (e && e.name==='NotAllowedError') toast('Touchez à nouveau pour écouter'); });
+  a._upd();
+}
+addEventListener('pagehide', () => sndStop());
+const PLAYI = '<svg class="pi" viewBox="0 0 24 24" aria-hidden="true" width="18" height="18"><path class="i-play" d="M8 5v14l11-7z" fill="currentColor"/><path class="i-pause" d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>';
+// bouton lecture/pause ; label visible ; la case garde l'avancement (--p)
+const sndBtn = (sp, i, label, cls='') => `<button type="button" class="snd ${cls}" data-snd="${sp.id}:${i}" aria-pressed="false" aria-label="${esc(label)} : lecture ou pause">${PLAYI}<span class="sl">${esc(label)}</span><i class="bar"></i></button>`;
+const sndAttr = x => `<a href="${esc(x.u)}" target="_blank" rel="noopener">© ${esc(x.a)} · ${esc(x.l)} · ${esc(x.src)} ↗</a>`;
+function sndBlock(sp, title='CHANT ET CRIS'){
+  if (!hasSnd(sp)) return '';
+  return `<div class="idbox sndbox"><div class="lbl">${title}</div>${sp.sounds.map((x,i) => `<div class="sndrow">${sndBtn(sp, i, `Écouter ${sp.sounds.length>1 ? (i+1)+'/'+sp.sounds.length : ''} · ${Math.round(x.d)} s`.replace('  ',' '))}<small class="attr">${sndAttr(x)}</small></div>`).join('')}</div>`;
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-snd]'); if (!b) return; e.preventDefault(); e.stopPropagation(); sndToggle(b.dataset.snd); }, true);
+// pièges sonores : espèces proches qui ont aussi un son (erreurs passées, confusions déclarées, même groupe, puis le reste)
+function sndDistract(sp, n){
+  const out = [], used = new Set([sp.id]); const add = x => { if (x && hasSnd(x) && !used.has(x.id) && out.length < n){ used.add(x.id); out.push(x); } };
+  const cf = S.conf[nkey(sp.id)] ? Object.entries(S.conf[nkey(sp.id)]).sort((a,b) => b[1]-a[1]).map(([i]) => NBY[i]) : [];
+  cf.forEach(add); shuffle(confIds(sp).map(i => NBY[i])).forEach(add);
+  const pool = natOf(sp.k).filter(x => x.id!==sp.id && hasSnd(x));
+  shuffle(pool.filter(x => x.g===sp.g && ncard(x.id))).forEach(add); shuffle(pool.filter(x => x.g===sp.g)).forEach(add);
+  shuffle(pool.filter(x => ncard(x.id))).forEach(add); shuffle(pool).forEach(add);
+  return out;
+}
+let sndHist = {};
+function natSnd(id){ const sp = NBY[id]; const n = sp.sounds.length; const h = sndHist[id] || (sndHist[id] = []); const last = h[h.length-1];
+  let c = [...Array(n).keys()].filter(i => i!==last); if (!c.length) c = [0]; c.sort((a,b) => h.lastIndexOf(a)-h.lastIndexOf(b));
+  const i = c[0]; h.push(i); if (h.length > 6) h.shift(); return i; }
 const introIdx = sp => { const a = sp.photos.map((_,i) => i); return a.filter(i => !sp.photos[i].far).concat(a.filter(i => sp.photos[i].far)).slice(0, 3); };
 const nearPi = x => { const a = x.photos.map((_,i) => i).filter(i => !x.photos[i].far); return a.length ? a[rndI(a.length)] : rndI(x.photos.length); };
 const galIdx = sp => { const a = sp.photos.map((_,i) => i); return a.filter(i => !sp.photos[i].far).concat(a.filter(i => sp.photos[i].far)); };
@@ -1005,11 +1057,25 @@ function buildNQ(id, qt, opt={}){
     const types = ['photo'];
     if (s >= 2) types.push('photo', 'name', 'crit');
     if (s >= 5 && hasConf) types.push('comp', 'comp');
+    if (hasSnd(sp) && sndOn()){ if (s >= 2) types.push('snd'); if (s >= 5) types.push('sndpick'); } // une chance sur 5 à 8 : le son complète la photo sans la remplacer
     qt = types[rndI(types.length)];
   }
+  if ((qt==='snd' || qt==='sndpick') && (!hasSnd(sp) || !sndOn())) qt = 'photo';
   if (qt==='comp' && !hasConf) qt = 'name';
   if (qt==='comp' && navigator.onLine===false && !confIds(sp).some(i => ncard(i))) qt = 'name';
   const close = s >= 2 || !!opt.close; const nOpt = s >= 8 ? 5 : 3;
+  if (qt==='snd'){
+    const ds = sndDistract(sp, 3);
+    if (ds.length >= 2){ const si = natSnd(id);
+      return {id, qt, kind:'nsnd', ask:'Quel animal fait ce son ?', si, opts:shuffle([sp, ...ds]).map(x => ({id:x.id, label:x.fr, pi: x.id===id ? natPhoto(id) : nearPi(x)})), answer:id}; }
+    qt = 'photo';
+  }
+  if (qt==='sndpick'){
+    const ds = sndDistract(sp, s >= 8 ? 3 : 2);
+    if (ds.length >= 2){ const si = natSnd(id); const pi = natPhoto(id);
+      return {id, qt, kind:'nsndpick', ask:'Quel est son chant ou son cri ?', sub:sp.fr, pi, opts:shuffle([sp, ...ds]).map(x => ({id:x.id, label:x.fr, si: x.id===id ? si : rndI(x.sounds.length)})), answer:id}; }
+    qt = 'photo';
+  }
   if (qt==='photo'){
     const pi = natPhoto(id, opt.avoid || []); const ds = natDistract(sp, nOpt, close);
     return {id, qt, kind:'nphoto', ask:'Quelle est cette espèce ?', pi, opts:shuffle([sp, ...ds]).map(x => ({id:x.id, label:x.fr})), answer:id};
@@ -1113,7 +1179,7 @@ function vNatHome(el, k){
   const tot = natOf(k).length, seen = natCards(k).length, mm = natMastered(k);
   const groups = groupsOf(k).map(g => { const L = natOf(k).filter(s => s.g===g); const sn = L.filter(s => ncard(s.id)).length; const m = L.filter(s => { const c = ncard(s.id); return c && isMasteredCd(c); }).length;
     return `<button class="zone" ${natCatAttrs({cat: sn ? 'studied' : 'fresh', k, g})}><i class="sw g-${g}"></i><div class="zn"><b>${esc(NAT.groups[g])}</b><span>${L.length} espèces · ${sn} découvertes · ${m} maîtrisées</span><div class="bar"><i class="g-${g}" style="width:${(sn/L.length*100).toFixed(1)}%"></i></div></div><span class="chev">›</span></button>`; }).join('');
-  const quick = ['mix','photo','name','comp','crit'];
+  const quick = ['mix','photo','name','comp','crit', ...(k==='animal' && sndOn() ? ['sound'] : [])];
   const sub = [due ? `${Math.min(due, rl, P.revMax)} à revoir` : '', Math.min(nl, fr) ? `${Math.min(nl, fr)} nouvelle${Math.min(nl,fr)>1?'s':''} espèce${Math.min(nl,fr)>1?'s':''}` : ''].filter(Boolean).join(' · ');
   el.innerHTML = `${domSwitch()}
   <div class="logo small nat ${k}"><div class="frame"><div class="w">${k==='plant'?'VÉGÉTAUX':'ANIMAUX'}</div></div><div class="g">MUNICH</div><div class="tagline">${tot} ESPÈCES · ${seen} DÉCOUVERTES</div></div>
@@ -1176,17 +1242,18 @@ function startNatCat(a, replace=false){
 function noRepeat(steps){ for (let i=1;i<steps.length;i++) if (steps[i].id===steps[i-1].id){ const j = steps.findIndex((s,m) => m>i && s.id!==steps[i-1].id); if (j>0){ [steps[i], steps[j]] = [steps[j], steps[i]]; } } return steps; }
 function startNatQuiz({k, type='mix', g=null, n=10}, replace=false){
   let pool = natCards(k).map(x => x.sp); if (g) pool = pool.filter(s => s.g===g); if (P.season){ const ps = pool.filter(inSeason); if (ps.length >= 4) pool = ps; }
+  if (type==='sound'){ pool = pool.filter(hasSnd); if (!pool.length){ toast('Aucune espèce découverte avec un son dans ce choix'); return; } }
   if (!pool.length){ toast(g ? 'Aucune espèce découverte dans ce groupe' : 'Découvre d’abord quelques espèces (séance du jour)'); return; }
   const now = Date.now();
   const scored = pool.map(sp => ({sp, w: priority(ncard(sp.id), now) + Math.random()*0.6})).sort((a,b) => a.w-b.w);
-  const steps = []; for (let i=0; i<n; i++) steps.push({type:'nq', id:scored[i % scored.length].sp.id, qt:type});
+  const steps = []; for (let i=0; i<n; i++) steps.push({type:'nq', id:scored[i % scored.length].sp.id, qt: type==='sound' ? (i%2 ? 'sndpick' : 'snd') : type});
   go(vSession, {nat:true, k, steps:noRepeat(shuffle(steps)), i:0, ok:0, n:0, title:'Défi · '+NQT[type], srs:true, again:{kind:'nquiz', k, type, g, n}}, {replace});
 }
 function startSpDrill(id, replace=false){
   const sp = NBY[id]; const tps = shuffle(['photo','name', sp.crit.length ? 'crit' : 'photo']);
   go(vSession, {nat:true, k:sp.k, steps:tps.map(t => ({type:'nq', id, qt:t})), i:0, ok:0, n:0, title:'Réviser : '+sp.fr, srs:true, again:{kind:'ndrill', id}}, {replace});
 }
-const NBASE = {nphoto:[4,10], nname:[5,12], ncomp:[4,10], ncrit:[6,15]};
+const NBASE = {nphoto:[4,10], nname:[5,12], ncomp:[4,10], ncrit:[6,15], nsnd:[8,20], nsndpick:[12,30]};
 function vNatSession(el, st){
   const total = st.steps.length;
   if (st.i >= total) return vNatSummary(el, st);
@@ -1196,12 +1263,13 @@ function vNatSession(el, st){
   $('#quit').onclick = () => { if (st.n===0 || confirm('Quitter la séance ? Tes réponses déjà données sont enregistrées.')) back(); };
   const step = st.steps[st.i];
   const progress = `<div class="qtop"><div class="prog"><i style="width:${(st.i/total*100).toFixed(1)}%"></i></div><div class="count" id="qcount">${st.i+1}/${total}</div><div class="qscore" id="qscore" aria-label="Bonnes réponses">✓ ${st.ok}</div></div>`;
-  const nextStep = () => { st.i++; CLOCK = null; vSession(el, st); el.scrollTop = 0; };
+  const nextStep = () => { sndStop(); st.i++; CLOCK = null; vSession(el, st); el.scrollTop = 0; };
   if (step.type==='nintro'){
     const sp = NBY[step.id]; if (!step.seen){ step.seen = true; markSeen(sp.id, introIdx(sp)); save(); }
     el.innerHTML = `<div class="qwrap">${progress}<div class="h2" style="margin-top:4px">Nouvelle espèce · ${esc(NAT.groups[sp.g])}</div>
       <article class="gcard spc">${spHead(sp)}${gallery(sp, introIdx(sp))}</article>
       <div class="idbox"><div class="lbl">POUR LA RECONNAÎTRE</div>${critList(sp)}</div>
+      ${sndBlock(sp)}
       ${confList(sp, true)}
       <div class="idbox"><div class="lbl">OÙ ET QUAND À MUNICH</div>${esc(sp.where)}${monthsBar(sp)}</div>
       <button class="next" id="nx">J’ai regardé, continuer ›</button></div>`;
@@ -1213,13 +1281,23 @@ function vNatSession(el, st){
   let body = '', answers = '';
   if (q.kind==='nphoto'){ body = `<div class="qphoto"><button type="button" class="phbtn" data-zoom="${sp.id}:${q.pi}" aria-label="Agrandir la photo">${imgTag(sp, q.pi, 'nph', false)}<span class="zico">${ZICON}</span></button></div>`; answers = `<div class="answers">${q.opts.map(o => `<button class="ans" data-id="${o.id}">${esc(o.label)}</button>`).join('')}</div>`; }
   if (q.kind==='ncrit'){ body = `<div class="qcrit">« ${esc(q.crit)} »</div>`; answers = `<div class="answers">${q.opts.map(o => `<button class="ans" data-id="${o.id}">${esc(o.label)}</button>`).join('')}</div>`; }
+  if (q.kind==='nsnd'){
+    body = `<div class="qsnd">${sndBtn(sp, q.si, 'Écouter le son', 'big')}<p class="small">Écoute autant de fois que tu veux, puis choisis.</p></div>`;
+    answers = `<div class="answers cols2 photos sndans">${q.opts.map(o => `<div class="pcell"><button class="ans pans" data-id="${o.id}" aria-label="${esc(o.label)}">${imgTag(NBY[o.id], o.pi, 'nph', false)}<small class="cap"><b>${esc(o.label)}</b></small></button>${zoomBtn(NBY[o.id], o.pi)}</div>`).join('')}</div>`;
+  }
+  if (q.kind==='nsndpick'){
+    body = `<div class="qphoto small"><button type="button" class="phbtn" data-zoom="${sp.id}:${q.pi}" aria-label="Agrandir la photo">${imgTag(sp, q.pi, 'nph', false)}<span class="zico">${ZICON}</span></button></div>`;
+    const L = 'ABCD';
+    answers = `<div class="answers sndpick">${q.opts.map((o,j) => `<div class="sprow">${sndBtn(NBY[o.id], o.si, 'Son '+L[j])}<button class="ans pick" data-id="${o.id}" aria-label="Choisir le son ${L[j]}">Choisir ${L[j]}<small class="cap"></small></button></div>`).join('')}</div>`;
+  }
   if (q.kind==='nname' || q.kind==='ncomp'){ answers = `<div class="answers cols2 photos ${q.kind==='ncomp'?'two':''}">${q.opts.map((o,j) => `<div class="pcell"><button class="ans pans" data-id="${o.id}" aria-label="Photo ${j+1} : choisir cette réponse">${imgTag(NBY[o.id], o.pi, 'nph', false)}<small class="cap"></small></button>${zoomBtn(NBY[o.id], o.pi)}</div>`).join('')}</div>`; }
   el.innerHTML = `<div class="qwrap">${progress}<div class="qcard">${badge}<div class="q">${esc(q.ask)}</div>${q.sub ? `<div class="qsub name">${esc(q.sub)}</div>` : ''}${body}</div>${answers}<div class="feedback" id="fb"></div></div>`;
   bindOpen($('.qcard',el));
   const showAnswered = fresh => {
     const a = step.ans;
     el.querySelectorAll('.ans').forEach(b => { const id = b.dataset.id; b.classList.remove('ok','ko','fade'); if (id===q.answer) b.classList.add('ok'); else if (id===a.chosen) b.classList.add('ko'); else b.classList.add('fade'); b.disabled = true;
-      const capEl = b.querySelector('.cap'); if (capEl){ const o = q.opts.find(x => x.id===id); capEl.innerHTML = `<b>${esc(o.label)}</b>${attrTxt(ph(NBY[id], o.pi))}`; } });
+      const capEl = b.querySelector('.cap'); if (capEl){ const o = q.opts.find(x => x.id===id);
+        capEl.innerHTML = q.kind==='nsndpick' ? `<b>${esc(o.label)}</b>` : `<b>${esc(o.label)}</b>${attrTxt(ph(NBY[id], o.pi))}`; } });
     const ch = a.chosen && a.chosen!==q.answer ? NBY[a.chosen] : null;
     const mainPi = q.pi != null ? q.pi : 0;
     const chPi = ch ? ((q.opts.find(o => o.id===ch.id) || {}).pi ?? 0) : 0;
@@ -1231,6 +1309,8 @@ function vNatSession(el, st){
       ${fiche(sp, mainPi, a.ok ? 'Bonne réponse · voir la fiche' : 'La bonne réponse · voir la fiche', 'good')}
       ${ch ? fiche(ch, chPi, 'Ta réponse · voir la fiche', 'bad') : ''}
       ${contrast}
+      ${hasSnd(sp) ? `<div class="sndfb">${sndBtn(sp, q.si ?? 0, 'Écouter : '+sp.fr)}${ch && hasSnd(ch) ? sndBtn(ch, q.kind==='nsndpick' ? ((q.opts.find(o => o.id===ch.id)||{}).si ?? 0) : 0, 'Écouter : '+ch.fr) : ''}</div>
+      <p class="attr">Son : ${sndAttr(sp.sounds[q.si ?? 0])}${ch && hasSnd(ch) && (q.kind==='nsnd' || q.kind==='nsndpick') ? ` · ${sndAttr(ch.sounds[q.kind==='nsndpick' ? ((q.opts.find(o => o.id===ch.id)||{}).si ?? 0) : 0])}` : ''}</p>` : ''}
       <p class="attr">Photo : ${attrLink(ph(sp, mainPi))}${ch && q.kind!=='nphoto' && q.kind!=='ncrit' ? ` · ${attrLink(ph(ch, chPi))}` : ''}</p>
       <button class="next" id="nx">Continuer ›</button>`;
     $('#qscore',el).textContent = '✓ '+st.ok;
@@ -1260,7 +1340,7 @@ function vNatSummary(el, st){
   const ids = [...new Set(st.steps.map(s => s.id))];
   const nNew = st.steps.filter(s => s.type==='nintro').length;
   const errRows = errs.map(s => { const sp = NBY[s.id]; const ch = s.ans.chosen && NBY[s.ans.chosen] && s.ans.chosen!==s.id ? NBY[s.ans.chosen] : null;
-    return `<button class="lrow srow" data-sp="${sp.id}"><img src="${ph(sp,0).f}" alt=""><div><b>${esc(sp.fr)}</b><span>${NQT[s.q.qt]}${ch?` · confondue avec ${esc(ch.fr)}`:''}</span></div><span class="chev">›</span></button>`; }).join('');
+    return `<button class="lrow srow" data-sp="${sp.id}"><img src="${ph(sp,0).f}" alt=""><div><b>${esc(sp.fr)}</b><span>${NQT[s.q.qt] || NQL[s.q.qt] || ''}${ch?` · confondue avec ${esc(ch.fr)}`:''}</span></div><span class="chev">›</span></button>`; }).join('');
   el.innerHTML = `<div class="summary"><div class="small">Séance terminée</div><div class="score">${p}%</div><div>${st.ok} bonne${st.ok>1?'s':''} réponse${st.ok>1?'s':''} sur ${st.n}${nNew ? ` · ${nNew} nouvelle${nNew>1?'s':''} espèce${nNew>1?'s':''}` : ''}</div></div>
    <button class="next" id="again">Continuer</button><button class="big-btn ghost" id="home" style="margin-top:10px">Retour à l’accueil<span>›</span></button>
    ${errs.length ? `<div class="h2">Erreurs à revoir (${errs.length})</div><div class="panel list">${errRows}</div>` : ''}
@@ -1297,6 +1377,7 @@ function vSpecies(el, args){
   const L = args.list && args.list.length ? args.list : natOf(sp.k).map(x => x.id); const i = L.indexOf(sp.id);
   el.innerHTML = `<article class="gcard spc">${spHead(sp)}${gallery(sp, galIdx(sp))}</article>
     <div class="idbox"><div class="lbl">POUR LA RECONNAÎTRE</div>${critList(sp)}</div>
+    ${sndBlock(sp)}
     ${confList(sp, true)}
     <div class="idbox"><div class="lbl">OÙ ET QUAND À MUNICH</div>${esc(sp.where)}${monthsBar(sp)}</div>
     <div class="idbox"><div class="lbl">LE SAVAIS-TU ?</div>${esc(sp.fact)}</div>
@@ -1365,12 +1446,12 @@ function vNatStats(el, args){
 /* ---------- Onglets nature : Défis, Espèces, Sortie ---------- */
 function vNatQuiz(el, args, k){
   setTitle('Défis · '+DOMS[k].s);
-  let type = NQT[args.type] ? args.type : 'mix', g = args.g || '', n = args.n || P.qn;
+  let type = NQT[args.type] && (args.type!=='sound' || (k==='animal' && sndOn())) ? args.type : 'mix', g = args.g || '', n = args.n || P.qn;
   const draw = () => {
     Object.assign(args, {type, g, n});
     const pool = natCards(k).filter(x => !g || x.sp.g===g).length;
     el.innerHTML = `<div class="h2" style="margin-top:4px">Type de défi</div>
-    <div class="seg">${Object.keys(NQT).map(t => `<button class="opt ${t===type?'on':''}" data-t="${t}"><b><span class="tt">${NQT[t]}</span></b><span>${NQT_D[t]}</span></button>`).join('')}</div>
+    <div class="seg">${Object.keys(NQT).filter(t => t!=='sound' || (k==='animal' && sndOn())).map(t => `<button class="opt ${t===type?'on':''}" data-t="${t}"><b><span class="tt">${NQT[t]}</span></b><span>${NQT_D[t]}</span></button>`).join('')}</div>
     <div class="h2">Groupe</div><div class="chips">${[['', 'Tous'], ...groupsOf(k).map(x => [x, NAT.groups[x]])].map(([x,t]) => `<button class="chip ${x===g?'on':''}" data-g="${x}">${esc(t)}</button>`).join('')}</div>
     <div class="h2">Nombre de questions</div><div class="chips">${[10,20,30].map(x => `<button class="chip ${x===n?'on':''}" data-n="${x}">${x}</button>`).join('')}</div>
     <p class="small">${pool} espèce${pool>1?'s':''} découverte${pool>1?'s':''} dans ce choix. Les défis portent sur les espèces déjà présentées ; les plus fragiles sortent plus souvent, et les mauvaises réponses proposées sont des espèces proches.${P.season ? ' Filtre saisonnier actif.' : ''}</p>
@@ -1428,6 +1509,7 @@ function vHowTo(el){
    <p><b>4. Mélanger les espèces proches.</b> Les mauvaises réponses proposées sont des espèces qui se ressemblent (tilleuls, érables, mésanges, canards…), d’autant plus que tu maîtrises l’espèce. Alterner des catégories proches aide à repérer ce qui les distingue.</p>
    <p><b>5. Comparer après une erreur.</b> En cas d’erreur, les deux espèces sont montrées côte à côte avec le critère qui les sépare. Les espèces confondues reviennent ensuite comme mauvaises réponses.</p>
    <p><b>6. Des critères, pas seulement une impression.</b> Chaque fiche donne 2–4 critères observables et la manière de distinguer les sosies.</p>
+   <p><b>8. Écouter aussi.</b> Pour 64 animaux (oiseaux surtout, mais aussi renard, chevreuil, sanglier, écureuil, crapaud et grenouille), 2 ou 3 enregistrements différents. Les questions sonores n’arrivent qu’une fois l’espèce un peu connue : d’abord « quel animal fait ce son ? », puis « quel est son chant ? » entre espèces proches (les mésanges entre elles…). Dehors, on entend souvent un oiseau avant de le voir.</p>
    <p><b>7. De saison et dehors.</b> En hiver, entraîne-toi sur les écorces, bourgeons, silhouettes et oiseaux d’eau ; le filtre saisonnier (Paramètres) donne la priorité à ce qu’on voit ce mois-ci. Le Défi sortie fait le pont avec le terrain, et iNaturalist, Flora Incognita ou Merlin servent à vérifier.</p></div>
    <div class="panel"><b>Sources</b><p class="small">Kornell & Bjork 2008 (Psychological Science) ; Wahlheim, Dunlosky & Jacoby 2011 (Memory & Cognition, familles d’oiseaux) ; Kang & Pashler 2012 (Applied Cognitive Psychology, contraste) ; Carvalho & Goldstone 2014 (Memory & Cognition, catégories proches) ; Birnbaum, Kornell, Bjork & Bjork 2013 (Memory & Cognition) ; Jacoby, Wahlheim & Coane 2010 (JEP:LMC, test et concepts naturels) ; FSRS (open-spaced-repetition). Détails dans le README.</p></div>`;
 }
@@ -1469,6 +1551,15 @@ function closeZoom(){ if (!ZOOM) return; const f = ZOOM.prevFocus; ZOOM.box.remo
 document.addEventListener('click', e => { const z = e.target.closest && e.target.closest('[data-zoom]'); if (!z) return; e.preventDefault(); e.stopPropagation(); const [id, i] = z.dataset.zoom.split(':'); openZoom(id, i); }, true);
 document.addEventListener('keydown', e => { if (e.key==='Escape' && ZOOM) closeZoom(); });
 addEventListener('popstate', () => closeZoom());
+const SND_CACHE = 'worldsounds-v1';
+const sndMB = () => { const t = NAT.species.reduce((a, sp) => a + (sp.sounds||[]).reduce((b, x) => b + (x.b||0), 0), 0); return t ? Math.max(1, Math.round(t/1e6)) : 14; };
+async function sndWarm(){
+  if (!NAT || !('caches' in window)) return 0; let n = 0;
+  try { const c = await caches.open(SND_CACHE);
+    for (const u of NAT.species.flatMap(sp => (sp.sounds||[]).map(x => x.f))){ const abs = new URL(u, location.href).href; if (await c.match(abs)) continue; try { const r = await fetch(u); if (r.ok){ await c.put(abs, r); n++; } } catch(e){ break; } }
+  } catch(e){}
+  return n;
+}
 let warmT = null; const natWarmSoon = () => { if (!warmT) warmT = setTimeout(() => { warmT = null; natWarm(); }, 2500); }; // laisse l'app s'afficher avant de télécharger
 let warmStop = false; addEventListener('pagehide', () => { warmStop = true; });
 async function natWarm(all=false){
@@ -1501,6 +1592,7 @@ async function init(){
 window.WorldGeo = { get state(){ return S; }, get prefs(){ return P; }, get beeps(){ return beeps; }, get stackDepth(){ return stack.length; }, buildQ, BY:()=>BY,
   dueCards, gradeOf, importData, migrate, sched,
   /* aides aux tests automatisés */ _session(steps, srs=false){ go(vSession, {steps, i:0, ok:0, n:0, title:'Test', srs}); },
+  _snd(){ return {key:AUDKEY, paused: AUD ? AUD.paused : true, src: AUD ? AUD.getAttribute('src') : null, t: AUD ? AUD.currentTime : 0}; }, _sndWarm: () => sndWarm(),
   _zoom(){ return ZOOM ? {s:ZOOM.s, src:ZOOM.img.getAttribute('src')} : null; },
   _natSession(steps, srs=false){ go(vSession, {nat:true, k:NBY[steps[0].id].k, steps, i:0, ok:0, n:0, title:'Test', srs}); },
   _cat: a => catItems(a).map(x => x.k),
