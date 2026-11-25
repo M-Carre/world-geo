@@ -10,6 +10,12 @@ Elle est en français, fonctionne hors ligne et enregistre la progression sur l�
 
 La progression est stockée sur l’appareil, dans l’app installée. Changer d’URL fait repartir de zéro ; l’export/import est dans l’onglet Paramètres.
 
+## Version 5.1 — photos entières
+- Les photos d’espèces ne sont plus recadrées : elles s’affichent entières (`object-fit: contain`, fond neutre selon le thème), dans des cases au format de chaque photo. C’est le cas partout : grilles de réponses, question photo → nom, introduction, corrigé, fiche, liste et confusions.
+- Grilles « quelle photo ? » et « laquelle est laquelle ? » : 2 colonnes seulement si chaque photo garde au moins 150 px de large, sinon 1 colonne pleine largeur (on fait défiler).
+- **Loupe** (coin haut droit de chaque photo-réponse) : ouvre la photo en plein écran **sans répondre**. Pincer pour zoomer (jusqu’à ×5), glisser pour se déplacer, double toucher pour ×2,5 ou revenir à ×1, puis « ✕ Fermer ». Un toucher simple sur la photo reste la réponse. Dans la question photo → nom, l’introduction et la fiche, toucher la photo l’agrandit.
+- 23 photos où l’animal est minuscule ou caché passent en fin de rotation. Elles ne sont plus montrées en introduction ni comme pièges, mais restent dans la fiche, en dernier. Elles ont été présélectionnées par CLIP puis vérifiées à l’œil : liste dans `world-build/nature/far_demote.json`.
+
 ## Version 5 — Végétaux et animaux de Munich
 L’accueil a maintenant trois domaines : **Géographie**, **Végétaux de Munich** (106 espèces : arbres feuillus, conifères, arbustes et lianes, fleurs et herbacées) et **Animaux de Munich** (99 espèces : oiseaux, oiseaux d’eau, mammifères, insectes, papillons, araignées/amphibiens/reptiles/escargots). La liste complète est dans `ESPECES.md`.
 

@@ -1,5 +1,5 @@
 'use strict';
-/* World – Géo v5 : PWA d'apprentissage des 194 pays (193 États de l'ONU + Vatican) et des végétaux et animaux de Munich.
+/* World – Géo v5.1 : PWA d'apprentissage des 194 pays (193 États de l'ONU + Vatican) et des végétaux et animaux de Munich.
    Répétition espacée : FSRS-6 (js/fsrs.js). */
 (() => {
 const CONT = {
@@ -421,7 +421,7 @@ function vHome(el){
   $('#quizcfg',el).onclick = () => home('quiz');
   el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => startQuiz({zone:'WORLD', type:b.dataset.q, n:P.qn}));
   el.querySelectorAll('.zone').forEach(b => b.onclick = () => go(vZone,{z:b.dataset.zone}));
-  bindOpen(el); bindDom(el); if (NAT) natWarm();
+  bindOpen(el); bindDom(el); if (NAT) natWarmSoon();
 }
 
 /* ---------- Liste d'une catégorie ---------- */
@@ -890,7 +890,7 @@ function vSettings(el){
     <button class="setlink" id="about"><span class="sl">Fonctionnement, sources et licences</span><span class="chev">›</span></button>
     <button class="setlink" id="resetp"><span class="sl">Rétablir les réglages par défaut</span><span class="chev">›</span></button>
   </div>
-  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 5 · ${FSRS.VERSION} · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
+  <p class="small" style="text-align:center;margin-top:18px">World – Géo · version 5.1 · ${FSRS.VERSION} · ${C.filter(c=>seen(c.iso3)).length} pays découverts</p>`;
   const redraw = () => { const y = el.scrollTop; vSettings(el); el.scrollTop = y; };
   const NUM = new Set(['qn','retention','revMax','natNew','natRevDay']);
   el.querySelectorAll('[data-pk]').forEach(b => b.onclick = () => { const k = b.dataset.pk; P[k] = NUM.has(k) ? +b.dataset.pv : b.dataset.pv; savePrefs(); redraw(); });
@@ -951,7 +951,13 @@ const natRevLeft = k => Math.max(0, (P.natRevDay||60) - natRevToday(k));
 function natFresh(k){ let L = natOf(k).filter(sp => !ncard(sp.id)); if (P.season) L = L.filter(inSeason).concat(L.filter(sp => !inSeason(sp))); return L; }
 const natMastered = k => natCards(k).filter(x => isMasteredCd(x.cd)).length;
 const ph = (sp, i) => sp.photos[i] || sp.photos[0];
+const sp0 = id => NBY[id];
+const introIdx = sp => { const a = sp.photos.map((_,i) => i); return a.filter(i => !sp.photos[i].far).concat(a.filter(i => sp.photos[i].far)).slice(0, 3); };
+const nearPi = x => { const a = x.photos.map((_,i) => i).filter(i => !x.photos[i].far); return a.length ? a[rndI(a.length)] : rndI(x.photos.length); };
+const galIdx = sp => { const a = sp.photos.map((_,i) => i); return a.filter(i => !sp.photos[i].far).concat(a.filter(i => sp.photos[i].far)); };
 const imgTag = (sp, i, cls='nph', lazy=true) => { const p = ph(sp, i); return `<img class="${cls}" src="${p.f}" ${lazy?'loading="lazy"':''} width="${p.w}" height="${p.h}" alt="${esc(sp.fr)}" data-pi="${i}">`; };
+const ZICON = '<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5 21 21M10.5 7.5v6M7.5 10.5h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+const zoomBtn = (sp, i, cls='zoom') => `<button type="button" class="${cls}" data-zoom="${sp.id}:${i}" aria-label="Agrandir la photo (ne compte pas comme réponse)">${ZICON}</button>`;
 const attrTxt = p => `© ${esc(p.a)} · ${esc(p.l)}`;
 const attrLink = p => `<a href="${esc(p.u)}" target="_blank" rel="noopener">${attrTxt(p)} · iNaturalist ↗</a>`;
 
@@ -959,7 +965,11 @@ const attrLink = p => `<a href="${esc(p.u)}" target="_blank" rel="noopener">${at
 function natPhoto(id, avoid=[]){
   const sp = NBY[id]; const n = sp.photos.length; S.nat = S.nat || {ph:{}}; S.nat.ph = S.nat.ph || {};
   const h = S.nat.ph[id] || (S.nat.ph[id] = []); const last = h[h.length-1];
-  let cand = [...Array(n).keys()].filter(i => i!==last && !avoid.includes(i));
+  // photos « lointaines » (sujet minuscule ou caché, marquées far) : seulement quand toutes les autres sont repassées depuis
+  const far = i => !!sp.photos[i].far, near = [...Array(n).keys()].filter(i => !far(i));
+  const ok = i => !far(i) || near.every(j => h.lastIndexOf(j) > h.lastIndexOf(i));
+  let cand = [...Array(n).keys()].filter(i => i!==last && !avoid.includes(i) && ok(i));
+  if (!cand.length) cand = [...Array(n).keys()].filter(i => i!==last && !avoid.includes(i));
   if (!cand.length) cand = [...Array(n).keys()].filter(i => i!==last);
   if (!cand.length) cand = [0];
   cand.sort((a,b) => h.lastIndexOf(a)-h.lastIndexOf(b));
@@ -1006,11 +1016,11 @@ function buildNQ(id, qt, opt={}){
   }
   if (qt==='name'){
     const pi = natPhoto(id); const ds = natDistract(sp, 3, true, navigator.onLine===false);
-    return {id, qt, kind:'nname', ask:'Quelle photo montre cette espèce ?', sub:sp.fr, opts:shuffle([sp, ...ds]).map(x => ({id:x.id, label:x.fr, pi: x.id===id ? pi : rndI(x.photos.length)})), answer:id};
+    return {id, qt, kind:'nname', ask:'Quelle photo montre cette espèce ?', sub:sp.fr, opts:shuffle([sp, ...ds]).map(x => ({id:x.id, label:x.fr, pi: x.id===id ? pi : nearPi(x)})), answer:id};
   }
   if (qt==='comp'){
     const cids = shuffle(confIds(sp)); const o = NBY[(navigator.onLine===false && cids.find(i => ncard(i))) || cids[0]]; const pi = natPhoto(id);
-    return {id, qt, kind:'ncomp', ask:'Laquelle est…', sub:sp.fr, other:o.id, opts:shuffle([{id, label:sp.fr, pi}, {id:o.id, label:o.fr, pi:rndI(o.photos.length)}]), answer:id};
+    return {id, qt, kind:'ncomp', ask:'Laquelle est…', sub:sp.fr, other:o.id, opts:shuffle([{id, label:sp.fr, pi}, {id:o.id, label:o.fr, pi:nearPi(o)}]), answer:id};
   }
   const ci = rndI(sp.crit.length); const ds = natDistract(sp, 3, false);
   return {id, qt:'crit', kind:'ncrit', ask:'Quelle espèce correspond à ce critère ?', crit:sp.crit[ci], ci, opts:shuffle([sp, ...ds]).map(x => ({id:x.id, label:x.fr})), answer:id};
@@ -1092,7 +1102,7 @@ function confList(sp, links=true){
 }
 function spHead(sp){ return `<div class="head"><div class="nm"><h1>${esc(sp.fr)}</h1><div class="cap">${esc(sp.de)} · <i>${esc(sp.sci)}</i></div></div><div class="num sp ${sp.k}">${sp.rank+1}</div></div>`; }
 function critList(sp){ return `<ul class="crit">${sp.crit.map(c => `<li>${esc(c)}</li>`).join('')}</ul>`; }
-function gallery(sp, idx){ return `<div class="gal">${idx.map(i => `<figure>${imgTag(sp, i, 'nph', false)}<figcaption>${attrLink(ph(sp,i))}</figcaption></figure>`).join('')}</div>`; }
+function gallery(sp, idx){ return `<div class="gal">${idx.map(i => `<figure><button type="button" class="phbtn" data-zoom="${sp.id}:${i}" aria-label="Agrandir la photo">${imgTag(sp, i, 'nph', false)}<span class="zico">${ZICON}</span></button><figcaption>${attrLink(ph(sp,i))}</figcaption></figure>`).join('')}</div>`; }
 
 /* ---------- Accueil nature ---------- */
 function vNatHome(el, k){
@@ -1128,7 +1138,7 @@ function vNatHome(el, k){
   $('#nfield',el).onclick = () => home('map');
   $('#nhow',el).onclick = () => go(vHowTo);
   $('#nstats',el).onclick = $('#nstreak',el).onclick = () => go(vNatStats, {k});
-  bindDom(el); bindOpen(el); natWarm();
+  bindDom(el); bindOpen(el); natWarmSoon();
 }
 function nextNatText(k){ let t = Infinity; natCards(k).forEach(x => t = Math.min(t, x.cd.due)); return t===Infinity ? '' : ' · prochaine révision '+relTime(t); }
 
@@ -1188,22 +1198,22 @@ function vNatSession(el, st){
   const progress = `<div class="qtop"><div class="prog"><i style="width:${(st.i/total*100).toFixed(1)}%"></i></div><div class="count" id="qcount">${st.i+1}/${total}</div><div class="qscore" id="qscore" aria-label="Bonnes réponses">✓ ${st.ok}</div></div>`;
   const nextStep = () => { st.i++; CLOCK = null; vSession(el, st); el.scrollTop = 0; };
   if (step.type==='nintro'){
-    const sp = NBY[step.id]; if (!step.seen){ step.seen = true; markSeen(sp.id, [0,1,2]); save(); }
+    const sp = NBY[step.id]; if (!step.seen){ step.seen = true; markSeen(sp.id, introIdx(sp)); save(); }
     el.innerHTML = `<div class="qwrap">${progress}<div class="h2" style="margin-top:4px">Nouvelle espèce · ${esc(NAT.groups[sp.g])}</div>
-      <article class="gcard spc">${spHead(sp)}${gallery(sp, [0,1,2].filter(i => i < sp.photos.length))}</article>
+      <article class="gcard spc">${spHead(sp)}${gallery(sp, introIdx(sp))}</article>
       <div class="idbox"><div class="lbl">POUR LA RECONNAÎTRE</div>${critList(sp)}</div>
       ${confList(sp, true)}
       <div class="idbox"><div class="lbl">OÙ ET QUAND À MUNICH</div>${esc(sp.where)}${monthsBar(sp)}</div>
       <button class="next" id="nx">J’ai regardé, continuer ›</button></div>`;
     bindOpen(el); $('#nx',el).onclick = nextStep; return;
   }
-  const q = step.q || (step.q = buildNQ(step.id, step.qt, {close:step.close, avoid: step.first ? [0,1,2] : []}));
+  const q = step.q || (step.q = buildNQ(step.id, step.qt, {close:step.close, avoid: step.first ? introIdx(sp0(step.id)) : []}));
   const sp = NBY[q.id]; const cd0 = ncard(q.id);
   const badge = `<button class="badge" style="background:var(--${sp.k==='plant'?'plant':'animal'})" ${natCatAttrs({cat: cd0 ? 'studied' : 'fresh', k:sp.k, g:sp.g})} aria-label="${esc(NAT.groups[sp.g])} : voir la liste">${esc(NAT.groups[sp.g])}</button>${isLeech(cd0)?`<button class="badge leechb" ${natCatAttrs({cat:'leech', k:sp.k})} aria-label="Espèce très difficile : voir la liste">Espèce difficile ›</button>`:''}`;
   let body = '', answers = '';
-  if (q.kind==='nphoto'){ body = `<div class="qphoto">${imgTag(sp, q.pi, 'nph', false)}</div>`; answers = `<div class="answers">${q.opts.map(o => `<button class="ans" data-id="${o.id}">${esc(o.label)}</button>`).join('')}</div>`; }
+  if (q.kind==='nphoto'){ body = `<div class="qphoto"><button type="button" class="phbtn" data-zoom="${sp.id}:${q.pi}" aria-label="Agrandir la photo">${imgTag(sp, q.pi, 'nph', false)}<span class="zico">${ZICON}</span></button></div>`; answers = `<div class="answers">${q.opts.map(o => `<button class="ans" data-id="${o.id}">${esc(o.label)}</button>`).join('')}</div>`; }
   if (q.kind==='ncrit'){ body = `<div class="qcrit">« ${esc(q.crit)} »</div>`; answers = `<div class="answers">${q.opts.map(o => `<button class="ans" data-id="${o.id}">${esc(o.label)}</button>`).join('')}</div>`; }
-  if (q.kind==='nname' || q.kind==='ncomp'){ answers = `<div class="answers cols2 photos ${q.kind==='ncomp'?'two':''}">${q.opts.map((o,j) => `<button class="ans pans" data-id="${o.id}" aria-label="Photo ${j+1}">${imgTag(NBY[o.id], o.pi, 'nph', false)}<small class="cap"></small></button>`).join('')}</div>`; }
+  if (q.kind==='nname' || q.kind==='ncomp'){ answers = `<div class="answers cols2 photos ${q.kind==='ncomp'?'two':''}">${q.opts.map((o,j) => `<div class="pcell"><button class="ans pans" data-id="${o.id}" aria-label="Photo ${j+1} : choisir cette réponse">${imgTag(NBY[o.id], o.pi, 'nph', false)}<small class="cap"></small></button>${zoomBtn(NBY[o.id], o.pi)}</div>`).join('')}</div>`; }
   el.innerHTML = `<div class="qwrap">${progress}<div class="qcard">${badge}<div class="q">${esc(q.ask)}</div>${q.sub ? `<div class="qsub name">${esc(q.sub)}</div>` : ''}${body}</div>${answers}<div class="feedback" id="fb"></div></div>`;
   bindOpen($('.qcard',el));
   const showAnswered = fresh => {
@@ -1285,7 +1295,7 @@ function vSpecies(el, args){
   const sp = NBY[args.id]; if (!sp){ el.innerHTML = '<p class="small">Espèce inconnue.</p>'; return; }
   setTitle(sp.fr);
   const L = args.list && args.list.length ? args.list : natOf(sp.k).map(x => x.id); const i = L.indexOf(sp.id);
-  el.innerHTML = `<article class="gcard spc">${spHead(sp)}${gallery(sp, sp.photos.map((_,j) => j))}</article>
+  el.innerHTML = `<article class="gcard spc">${spHead(sp)}${gallery(sp, galIdx(sp))}</article>
     <div class="idbox"><div class="lbl">POUR LA RECONNAÎTRE</div>${critList(sp)}</div>
     ${confList(sp, true)}
     <div class="idbox"><div class="lbl">OÙ ET QUAND À MUNICH</div>${esc(sp.where)}${monthsBar(sp)}</div>
@@ -1429,6 +1439,37 @@ function natWarmList(){
   ['plant','animal'].forEach(k => { natCards(k).forEach(x => x.sp.photos.forEach(p => urls.push(p.f))); natCards(k).forEach(x => confIds(x.sp).forEach(i => NBY[i] && NBY[i].photos.forEach(p => urls.push(p.f)))); natFresh(k).slice(0, (P.natNew||5)+2).forEach(sp => sp.photos.forEach(p => urls.push(p.f))); });
   return urls;
 }
+/* Visionneuse plein écran : photo entière, pincement pour zoomer (géré ici pour ne pas zoomer toute l'app), double toucher, bouton Fermer.
+   Ouverte par la loupe ou par un toucher sur une photo qui n'est pas une réponse ; elle ne compte jamais comme une réponse. */
+let ZOOM = null;
+function openZoom(id, i){
+  const sp = NBY[id]; if (!sp) return; i = +i || 0; const p = ph(sp, i); closeZoom();
+  const box = document.createElement('div'); box.className = 'lbox'; box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true'); box.setAttribute('aria-label', 'Photo agrandie : '+sp.fr);
+  box.innerHTML = `<div class="lb-stage"><img src="${p.f}" width="${p.w}" height="${p.h}" alt="${esc(sp.fr)}" draggable="false"></div>
+    <div class="lb-bar"><p class="lb-cap">${attrTxt(p)}<br><span>Pince pour zoomer · double toucher</span></p><button type="button" class="lb-close" aria-label="Fermer la photo">✕ Fermer</button></div>`;
+  document.body.appendChild(box); document.documentElement.classList.add('lb-open');
+  const img = box.querySelector('img'); const z = ZOOM = {box, img, s:1, x:0, y:0, prevFocus: document.activeElement};
+  const apply = () => { const r = box.querySelector('.lb-stage').getBoundingClientRect(); const mx = Math.max(0, (img.offsetWidth*z.s - r.width)/2), my = Math.max(0, (img.offsetHeight*z.s - r.height)/2);
+    z.x = Math.min(mx, Math.max(-mx, z.x)); z.y = Math.min(my, Math.max(-my, z.y)); img.style.transform = `translate(${z.x}px,${z.y}px) scale(${z.s})`; };
+  const stage = box.querySelector('.lb-stage'); let t0 = null, lastTap = 0;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  stage.addEventListener('touchstart', e => { const t = e.touches; if (t.length===2) t0 = {d:dist(t), s:z.s}; else if (t.length===1){ t0 = {px:t[0].clientX, py:t[0].clientY, x:z.x, y:z.y};
+      const now = Date.now(); if (now - lastTap < 300){ z.s = z.s > 1.05 ? 1 : 2.5; if (z.s===1){ z.x = 0; z.y = 0; } apply(); lastTap = 0; z.dblT = now; } else lastTap = now; } }, {passive:true});
+  stage.addEventListener('touchmove', e => { e.preventDefault(); const t = e.touches; if (!t0) return;
+      if (t.length===2 && t0.d){ z.s = Math.min(5, Math.max(1, t0.s * dist(t) / t0.d)); apply(); }
+      else if (t.length===1 && t0.px!=null && z.s > 1){ z.x = t0.x + t[0].clientX - t0.px; z.y = t0.y + t[0].clientY - t0.py; apply(); } }, {passive:false});
+  stage.addEventListener('touchend', e => { if (e.touches.length===0){ t0 = null; if (z.s < 1.05){ z.s = 1; z.x = 0; z.y = 0; apply(); } } else if (e.touches.length===1) t0 = {px:e.touches[0].clientX, py:e.touches[0].clientY, x:z.x, y:z.y}; });
+  ['gesturestart','gesturechange'].forEach(n => box.addEventListener(n, e => e.preventDefault()));
+  stage.addEventListener('dblclick', () => { if (Date.now() - (z.dblT||0) < 700) return; z.s = z.s > 1.05 ? 1 : 2.5; if (z.s===1){ z.x = 0; z.y = 0; } apply(); });
+  stage.addEventListener('wheel', e => { e.preventDefault(); z.s = Math.min(5, Math.max(1, z.s * (e.deltaY < 0 ? 1.15 : 1/1.15))); apply(); }, {passive:false});
+  box.querySelector('.lb-close').onclick = e => { e.stopPropagation(); closeZoom(); };
+  box.querySelector('.lb-close').focus({preventScroll:true});
+}
+function closeZoom(){ if (!ZOOM) return; const f = ZOOM.prevFocus; ZOOM.box.remove(); ZOOM = null; document.documentElement.classList.remove('lb-open'); if (f && f.focus && document.contains(f)) f.focus({preventScroll:true}); }
+document.addEventListener('click', e => { const z = e.target.closest && e.target.closest('[data-zoom]'); if (!z) return; e.preventDefault(); e.stopPropagation(); const [id, i] = z.dataset.zoom.split(':'); openZoom(id, i); }, true);
+document.addEventListener('keydown', e => { if (e.key==='Escape' && ZOOM) closeZoom(); });
+addEventListener('popstate', () => closeZoom());
+let warmT = null; const natWarmSoon = () => { if (!warmT) warmT = setTimeout(() => { warmT = null; natWarm(); }, 2500); }; // laisse l'app s'afficher avant de télécharger
 let warmStop = false; addEventListener('pagehide', () => { warmStop = true; });
 async function natWarm(all=false){
   if (warming || !NAT || !('caches' in window) || navigator.onLine===false) return 0; warming = true; let n = 0;
@@ -1460,6 +1501,7 @@ async function init(){
 window.WorldGeo = { get state(){ return S; }, get prefs(){ return P; }, get beeps(){ return beeps; }, get stackDepth(){ return stack.length; }, buildQ, BY:()=>BY,
   dueCards, gradeOf, importData, migrate, sched,
   /* aides aux tests automatisés */ _session(steps, srs=false){ go(vSession, {steps, i:0, ok:0, n:0, title:'Test', srs}); },
+  _zoom(){ return ZOOM ? {s:ZOOM.s, src:ZOOM.img.getAttribute('src')} : null; },
   _natSession(steps, srs=false){ go(vSession, {nat:true, k:NBY[steps[0].id].k, steps, i:0, ok:0, n:0, title:'Test', srs}); },
   _cat: a => catItems(a).map(x => x.k),
   _nat: { get data(){ return NAT; }, plan: (k,o) => natSessionSteps(k,o||{}), buildNQ, cat: a => natCatItems(a).map(x => x.id), newToday: natNewToday, revToday: natRevToday, warm: natWarm, distract: (id,n,c) => natDistract(NBY[id],n,c).map(x=>x.id), photo: natPhoto }, _args(){ const t = stack[stack.length-1]; return t ? t.args : null; }, _top(){ const t = stack[stack.length-1]; return t ? t.fn.name : null; } };

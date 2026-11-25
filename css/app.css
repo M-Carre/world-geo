@@ -437,3 +437,32 @@ html[data-theme="light"] .domsw{box-shadow:0 1px 3px rgba(60,50,30,.08)}
 .logo.small.nat .tagline{display:block}
 .qphoto img{max-height:min(44vh,420px)}
 .gal figure:first-child img{max-height:min(46vh,440px)}
+
+/* ===== v5.1 : photos d'espèces entières (jamais recadrées) + visionneuse ===== */
+:root{--phbg:#1d1d1d;--phbg-card:#e9e6df}
+html[data-theme="light"]{--phbg:#e3dfd5}
+.answers.photos{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));align-items:start}
+.pcell{position:relative;min-width:0}
+.pcell .ans.pans{width:100%}
+.ans.pans img{width:100%;height:auto;aspect-ratio:auto;max-height:min(62vh,520px);object-fit:contain;background:var(--phbg);border-radius:10px;display:block}
+.zoom{position:absolute;top:6px;right:6px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.62);color:#fff;display:flex;align-items:center;justify-content:center;z-index:2;box-shadow:0 1px 4px rgba(0,0,0,.35);border:1.5px solid rgba(255,255,255,.75)}
+.phbtn{display:block;width:100%;padding:0;position:relative;border-radius:12px;overflow:hidden;background:var(--phbg-card)}
+.phbtn .zico{position:absolute;right:6px;bottom:6px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.qphoto .phbtn{background:var(--phbg)}
+.qphoto img{background:var(--phbg);object-fit:contain;width:100%;height:auto;margin:0 auto}
+.gal{align-items:start}
+.gal img,.gal figure:first-child img{width:100%;height:auto;aspect-ratio:auto;object-fit:contain;background:var(--phbg-card);border-radius:0}
+.gal figure:not(:first-child) img{max-height:min(34vh,260px)}
+.mini-fiche img.mf{object-fit:contain;background:var(--phbg-card)}
+.spcard .spimg{background:var(--phbg-card)}
+.spcard .spimg img{object-fit:contain}
+.qcard .qsub.name{font-size:min(1.1875rem,6.4vw);overflow-wrap:break-word}
+html.lb-open,html.lb-open body{overflow:hidden}
+.lbox{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.95);display:flex;flex-direction:column;color:#fff;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+.lb-stage{flex:1;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
+.lb-stage img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.lb-bar{display:flex;align-items:center;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.lb-cap{flex:1;min-width:0;margin:0;font-size:.6875rem;line-height:1.35;color:#ccc;overflow-wrap:anywhere}
+.lb-cap span{color:#999}
+.lb-close{flex:none;background:#fff;color:#111;font-weight:800;border-radius:999px;padding:10px 16px;min-height:44px}
+.conf img,.lrow.srow img{object-fit:contain;background:var(--phbg-card)}
